@@ -1,0 +1,18 @@
+{
+  "currency": "USD",
+  "models": {
+    "deepseek-v4-flash": {
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "gpt-5.5/high": {
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    }
+  },
+  "notes": [
+    "Replace zeros with your actual provider pricing.",
+    "Keep pricing local so AboT can estimate cost before execution."
+  ]
+}
+

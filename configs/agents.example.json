@@ -1,0 +1,53 @@
+{
+  "agents": {
+    "visual-engineering": {
+      "model": "gemini-3.1-pro-preview/high",
+      "tags": ["css", "ui", "frontend", "visual"]
+    },
+    "sisyphus": {
+      "model": "gpt-5.5/max",
+      "tags": ["heavy-implementation", "ultra"]
+    },
+    "hephaestus": {
+      "model": "deepseek-v4-pro",
+      "tags": ["code", "debugging"]
+    },
+    "oracle": {
+      "model": "gpt-5.5/high",
+      "tags": ["planning", "architecture"]
+    },
+    "librarian": {
+      "model": "qwen3.7-plus",
+      "tags": ["research", "docs"]
+    },
+    "momus": {
+      "model": "gpt-5.5/xhigh",
+      "tags": ["qa", "review"]
+    },
+    "atlas": {
+      "model": "kimi-k2.7-code",
+      "tags": ["implementation", "medium"]
+    },
+    "sisyphus-junior": {
+      "model": "kimi-k2.6",
+      "tags": ["implementation", "low-cost"]
+    },
+    "explore": {
+      "model": "deepseek-v4-flash",
+      "tags": ["quick", "lookup"]
+    },
+    "prometheus": {
+      "model": "glm-5.2",
+      "tags": ["debug", "trace"]
+    },
+    "unspecified-high": {
+      "model": "gpt-5.5/high",
+      "tags": ["general", "fallback"]
+    },
+    "unspecified-low": {
+      "model": "deepseek-v4-flash",
+      "tags": ["general", "cheap"]
+    }
+  }
+}
+

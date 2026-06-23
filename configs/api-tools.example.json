@@ -1,0 +1,20 @@
+{
+  "tools": [
+    {
+      "id": "router-llm",
+      "label": "Router LLM fallback",
+      "kind": "openai-compatible-chat",
+      "enabled": false,
+      "baseUrlEnv": "ABOT_ROUTER_BASE_URL",
+      "apiKeyEnv": "ABOT_ROUTER_API_KEY",
+      "modelEnv": "ABOT_ROUTER_MODEL"
+    },
+    {
+      "id": "execution",
+      "label": "Task execution adapter",
+      "kind": "dry-run",
+      "enabled": true
+    }
+  ]
+}
+

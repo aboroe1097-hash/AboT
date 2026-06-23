@@ -1,0 +1,14 @@
+{
+  "name": "@abot/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@abot/core": "0.1.0",
+    "@abot/memory": "0.1.0",
+    "@abot/router": "0.1.0"
+  },
+  "exports": {
+    ".": "./src/server.ts"
+  }
+}

@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AboT v0.01</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <main class="thread-pane">
+        <header class="thread-topbar">
+          <div class="brand-line">
+            <div class="brand-mark">A</div>
+            <div>
+              <div id="active-project" class="active-project">AboT</div>
+              <div id="health-line" class="health-line">Starting</div>
+            </div>
+          </div>
+          <button id="refresh-projects" class="ghost-button" type="button">Refresh</button>
+        </header>
+
+        <section id="chat-feed" class="thread-feed" aria-live="polite"></section>
+
+        <form id="chat-form" class="bottom-composer">
+          <textarea id="task" rows="3" placeholder="Ask AboT to route, inspect, edit, or run something"></textarea>
+          <div class="composer-options">
+            <button class="plus-button" type="button" title="Add context">+</button>
+            <span class="access-chip">Full access</span>
+            <label class="compact-field">
+              <span>Mode</span>
+              <select id="run-mode">
+                <option value="orchestrated">Orchestrated</option>
+                <option value="fixed_agent">Fixed Agent</option>
+              </select>
+            </label>
+            <label class="compact-field agent-field">
+              <span>Agent</span>
+              <select id="fixed-agent"></select>
+            </label>
+            <label class="compact-field diff-field">
+              <span>Diff</span>
+              <input id="diff-lines" type="number" min="0" value="0" />
+            </label>
+            <div class="composer-actions">
+              <button id="route-button" type="button">Route</button>
+              <button id="chat-button" class="send-button" type="submit">Send</button>
+            </div>
+          </div>
+        </form>
+      </main>
+
+      <aside class="right-rail">
+        <section class="settings-panel">
+          <div class="rail-head">
+            <div>
+              <h1>Settings</h1>
+              <div class="rail-sub">Project, context, tools, workspace</div>
+            </div>
+          </div>
+
+          <nav class="rail-tabs" aria-label="Inspector">
+            <button class="rail-tab active" data-panel="settings" type="button">Settings</button>
+            <button class="rail-tab" data-panel="workspace" type="button">Workspace</button>
+            <button class="rail-tab" data-panel="tools" type="button">Tools</button>
+          </nav>
+
+          <div id="panel-settings" class="rail-panel active-panel">
+            <section class="rail-section">
+              <div class="section-head">
+                <span>Projects</span>
+              </div>
+              <div id="project-list" class="project-list"></div>
+              <form id="project-form" class="project-form">
+                <label>
+                  <span>Name</span>
+                  <input id="project-name" name="name" autocomplete="off" />
+                </label>
+                <label>
+                  <span>Root Path</span>
+                  <input id="project-root" name="rootPath" autocomplete="off" />
+                </label>
+                <button type="submit">Add Project</button>
+              </form>
+            </section>
+
+            <section class="rail-section">
+              <div class="section-head">
+                <span>Context</span>
+              </div>
+              <label>
+                <span>Open Files</span>
+                <textarea id="open-files" rows="4" placeholder="src/middleware/auth.ts&#10;src/utils/jwt.ts"></textarea>
+              </label>
+              <label>
+                <span>Changed Files</span>
+                <textarea id="changed-files" rows="4"></textarea>
+              </label>
+            </section>
+          </div>
+
+          <div id="panel-workspace" class="rail-panel">
+            <section class="rail-section">
+              <div class="section-head">
+                <span>Files</span>
+                <button id="refresh-tree" type="button">Refresh</button>
+              </div>
+              <div class="path-row">
+                <input id="tree-path" value="." />
+                <button id="open-tree-path" type="button">Open</button>
+              </div>
+              <div id="file-tree" class="file-tree"></div>
+            </section>
+
+            <section class="rail-section">
+              <div class="section-head">
+                <span>Editor</span>
+                <button id="save-file" type="button">Save</button>
+              </div>
+              <label>
+                <span>File Path</span>
+                <input id="file-path" placeholder="src/index.ts" />
+              </label>
+              <textarea id="file-editor" class="file-editor" spellcheck="false"></textarea>
+            </section>
+
+            <section class="rail-section">
+              <div class="section-head">
+                <span>Terminal</span>
+                <button id="run-command" type="button">Run</button>
+              </div>
+              <label>
+                <span>Command</span>
+                <input id="command-input" placeholder="npm run typecheck" />
+              </label>
+              <pre id="command-output" class="command-output"></pre>
+            </section>
+          </div>
+
+          <div id="panel-tools" class="rail-panel">
+            <section class="rail-section">
+              <div class="section-head">
+                <span>API Tools</span>
+                <button id="save-tools" type="button">Save</button>
+              </div>
+              <div id="tools-status" class="tools-status"></div>
+              <textarea id="tools-editor" class="tools-editor" spellcheck="false"></textarea>
+            </section>
+          </div>
+        </section>
+
+        <section class="logs-panel">
+          <div class="logs-head">
+            <div>
+              <h2>Logs</h2>
+              <div class="rail-sub">Routing, timing, tokens</div>
+            </div>
+            <div class="logs-actions">
+              <button id="export-json" type="button">JSON</button>
+              <button id="export-csv" type="button">CSV</button>
+              <button id="refresh-routes" type="button">Refresh</button>
+            </div>
+          </div>
+          <div id="routes-list" class="routes-list"></div>
+        </section>
+      </aside>
+    </div>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

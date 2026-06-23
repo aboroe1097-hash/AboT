@@ -1,0 +1,18 @@
+{
+  "phase1Threshold": 0.75,
+  "ambiguityMargin": 0.15,
+  "expensiveAgentConfidence": 0.85,
+  "maxSessionCostUnits": 100,
+  "contextBudgets": {
+    "low": 2000,
+    "medium": 6000,
+    "high": 16000,
+    "ultra": 32000
+  },
+  "guardedAgents": ["sisyphus", "momus", "ultrabrain"],
+  "costDowngrades": {
+    "sisyphus": "hephaestus",
+    "momus": "atlas",
+    "ultrabrain": "oracle"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@abot/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@abot/adapters-opencode": "0.1.0",
+    "@abot/core": "0.1.0",
+    "@abot/server": "0.1.0"
+  }
+}

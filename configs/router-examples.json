@@ -1,0 +1,27 @@
+[
+  {
+    "task": "add responsive CSS polish to the dashboard cards",
+    "files": ["apps/web/src/dashboard.module.css"],
+    "expectedAgent": "visual-engineering"
+  },
+  {
+    "task": "review the failing auth tests and find the regression",
+    "files": ["src/auth.test.ts"],
+    "expectedAgent": "prometheus"
+  },
+  {
+    "task": "fix the auth middleware returning 401 for valid tokens",
+    "files": ["src/middleware/auth.ts", "src/utils/jwt.ts"],
+    "expectedAgent": "prometheus"
+  },
+  {
+    "task": "rewrite the entire payment flow from scratch",
+    "files": ["src/payments/service.ts", "src/payments/routes.ts", "src/payments/model.ts", "src/payments/client.ts", "src/payments/webhook.ts", "src/payments/tests.ts"],
+    "expectedAgent": "sisyphus"
+  },
+  {
+    "task": "do the thing we discussed",
+    "files": [],
+    "expectedAgent": "unspecified-high"
+  }
+]
