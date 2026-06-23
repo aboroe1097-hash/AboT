@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { AgentName, RouterIntent } from "@abot/router";
+import { MAX_ROUTE_LIMIT, MAX_CHAT_MESSAGE_LIMIT } from "@abot/utils";
 import type { ChatMessageRecord, ProjectRecord, RouteEventInput, RouteEventRecord } from "./index.js";
 
 interface ProjectRow {
@@ -164,7 +165,7 @@ export class SqliteAboTStore {
   }
 
   listRoutes(input: { projectId?: string; limit?: number }): RouteEventRecord[] {
-    const limit = Math.max(1, Math.min(input.limit ?? 50, 200));
+    const limit = Math.max(1, Math.min(input.limit ?? 50, MAX_ROUTE_LIMIT));
     const rows = input.projectId
       ? (this.db
           .prepare("SELECT * FROM route_events WHERE project_id = ? ORDER BY created_at DESC LIMIT ?")
@@ -226,7 +227,7 @@ export class SqliteAboTStore {
   }
 
   listChatMessages(input: { projectId: string; limit?: number }): ChatMessageRecord[] {
-    const limit = Math.max(1, Math.min(input.limit ?? 100, 300));
+    const limit = Math.max(1, Math.min(input.limit ?? 100, MAX_CHAT_MESSAGE_LIMIT));
     const rows = this.db
       .prepare("SELECT * FROM chat_messages WHERE project_id = ? ORDER BY created_at ASC LIMIT ?")
       .all(input.projectId, limit) as unknown as ChatMessageRow[];

@@ -18,6 +18,14 @@ import { estimateTokenCount } from "@abot/context";
 import { executeAgentTask, executeTask, ExecutionError, getOpenAgentConfigPath } from "@abot/executor";
 import { SqliteAboTStore, type ProjectRecord, type RouteEventRecord } from "@abot/memory";
 import { AGENT_NAMES, getAgentCostUnits, type AgentName, type RouterVerdict } from "@abot/router";
+import {
+  DEFAULT_COMMAND_TIMEOUT_MS,
+  DEFAULT_EXECUTION_TIMEOUT_MS,
+  elapsed,
+  MAX_TASK_LENGTH,
+  MAX_WORKSPACE_ENTRIES,
+  MIN_TIMEOUT_MS
+} from "@abot/utils";
 import { writeLocalEnvValues } from "./env.js";
 import { getApiToolStatuses, readApiTools, writeApiTools, type ApiToolsFile } from "./tool-config.js";
 
@@ -173,7 +181,7 @@ async function handleRequest(input: {
       content: body.task
     });
     const execution = body.execute
-      ? await executeAndLog(store, result, Number(body.executionTimeoutMs ?? 120000))
+      ? await executeAndLog(store, result, Number(body.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS))
       : {
           status: "dry-run",
           content: buildDryRunAssistantMessage(result),
@@ -302,7 +310,7 @@ async function handleRequest(input: {
     }
     const cwd = resolveProjectPath(project.rootPath, body.cwd ?? ".");
     const started = performance.now();
-    const result = await runWorkspaceCommand(body.command, cwd, Number(body.timeoutMs ?? 30000));
+    const result = await runWorkspaceCommand(body.command, cwd, Number(body.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS));
     sendJson(response, 200, {
       project,
       command: body.command,
@@ -346,6 +354,7 @@ async function routeAndLog(
 ): Promise<RouteResponse> {
   const totalStart = performance.now();
   if (!body.task?.trim()) throw new Error("task is required");
+  if (body.task.length > MAX_TASK_LENGTH) throw new Error(`task must be ${MAX_TASK_LENGTH} characters or fewer`);
   const mode = body.mode === "fixed_agent" ? "fixed_agent" : "orchestrated";
   const fixedAgent = normalizeAgentName(body.fixedAgent);
 
@@ -743,7 +752,7 @@ function listWorkspaceEntries(rootPath: string, targetPath: string): Array<{
   const ignored = new Set([".git", "node_modules", "dist", ".next", ".turbo"]);
   return readdirSync(targetPath, { withFileTypes: true })
     .filter((entry) => !ignored.has(entry.name))
-    .slice(0, 300)
+    .slice(0, MAX_WORKSPACE_ENTRIES)
     .map((entry) => {
       const absolute = join(targetPath, entry.name);
       const entryStat = statSync(absolute);
@@ -772,7 +781,7 @@ async function runWorkspaceCommand(command: string, cwd: string, timeoutMs: numb
   try {
     const { stdout, stderr } = await execAsync(command, {
       cwd,
-      timeout: Math.max(1000, Math.min(timeoutMs, 120000)),
+      timeout: Math.max(MIN_TIMEOUT_MS, Math.min(timeoutMs, 120000)),
       maxBuffer: 1024 * 1024 * 3,
       windowsHide: true,
       shell: process.platform === "win32" ? "powershell.exe" : undefined
@@ -796,8 +805,8 @@ async function runWorkspaceCommand(command: string, cwd: string, timeoutMs: numb
 
 function normalizeAgentName(value: unknown): AgentName | undefined {
   if (typeof value !== "string") return undefined;
-  const agentSet = new Set(AGENT_NAMES);
-  return agentSet.has(value) ? value : undefined;
+  const agentSet: ReadonlySet<string> = new Set(AGENT_NAMES);
+  return agentSet.has(value) ? (value as AgentName) : undefined;
 }
 
 function estimateOutputTokens(planned: PlannedTask): number {
@@ -1069,10 +1078,6 @@ function isEnvFileIgnored(): boolean {
   if (!existsSync(".gitignore")) return false;
   const gitignore = readFileSync(".gitignore", "utf8");
   return /^\.env(?:\.\*)?$/m.test(gitignore) || /^\.env\.local$/m.test(gitignore);
-}
-
-function elapsed(start: number): number {
-  return Number((performance.now() - start).toFixed(3));
 }
 
 function routesToCsv(routes: RouteEventRecord[]): string {

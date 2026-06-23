@@ -16,7 +16,8 @@
       "@abot/executor": ["packages/executor/src/index.ts"],
       "@abot/memory": ["packages/memory/src/index.ts"],
       "@abot/router": ["packages/router/src/index.ts"],
-      "@abot/server": ["apps/server/src/server.ts"]
+      "@abot/server": ["apps/server/src/server.ts"],
+      "@abot/utils": ["packages/utils/src/index.ts"]
     }
   },
   "include": [

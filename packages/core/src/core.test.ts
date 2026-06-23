@@ -102,4 +102,46 @@ describe("planTaskWithFallback", () => {
     expect(planned.decision.reason).not.toContain('"error"');
     expect(planned.decision.reason).not.toContain("developers.google.com");
   });
+
+  it("redacts provider secrets from router fallback errors", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              message:
+                "Upstream failed with Bearer bearer-token-abc123, sk-proj-abcdefghijklmnopqrstuvwxyz123456, and api_key=AQ.fake.secret.token"
+            }
+          }),
+          {
+            status: 500,
+            headers: { "content-type": "application/json" }
+          }
+        )
+      )
+    );
+
+    const planned = await planTaskWithFallback(
+      {
+        task: "everything ready?"
+      },
+      {
+        llmRouter: {
+          enabled: true,
+          provider: "gemini",
+          baseUrl: "https://example.test/v1",
+          apiKey: "invalid",
+          model: "gemini-test"
+        }
+      }
+    );
+
+    expect(planned.decision.reason).toContain("Bearer [REDACTED]");
+    expect(planned.decision.reason).toContain("sk-[REDACTED]");
+    expect(planned.decision.reason).toContain("api_key=[REDACTED]");
+    expect(planned.decision.reason).not.toContain("bearer-token-abc123");
+    expect(planned.decision.reason).not.toContain("abcdefghijklmnopqrstuvwxyz123456");
+    expect(planned.decision.reason).not.toContain("AQ.fake.secret.token");
+  });
 });

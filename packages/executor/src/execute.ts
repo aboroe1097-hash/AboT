@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { resolveProviderModel, type ProviderConfig } from "./provider-registry.js";
+import { DEFAULT_EXECUTION_TIMEOUT_MS, elapsed, MAX_CONTEXT_FILES, MAX_TIMEOUT_MS, MIN_TIMEOUT_MS } from "@abot/utils";
 import { getAgentModelCandidates } from "./openagent-config.js";
 import type {
   AgentExecutionRequest,
@@ -133,7 +134,7 @@ export async function executeCodexCliTask(request: AgentExecutionRequest): Promi
       {
         cwd: request.cwd || process.cwd(),
         env,
-        timeoutMs: Math.max(1000, Math.min(request.timeoutMs ?? 300000, 600000)),
+        timeoutMs: Math.max(MIN_TIMEOUT_MS, Math.min(request.timeoutMs ?? MAX_TIMEOUT_MS, MAX_TIMEOUT_MS)),
         input: buildCodexPrompt(request)
       }
     );
@@ -325,7 +326,7 @@ export async function executeTask(request: ExecutionRequest): Promise<ExecutionR
   };
 
   const controller = new AbortController();
-  const timeout = windowedTimeout(controller, request.timeoutMs ?? 120000);
+  const timeout = windowedTimeout(controller, request.timeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS);
 
   try {
     const response = await fetch(`${resolved.provider.baseUrl.replace(/\/$/, "")}/chat/completions`, {
@@ -376,7 +377,7 @@ export async function executeTask(request: ExecutionRequest): Promise<ExecutionR
 }
 
 function buildMessages(request: ExecutionRequest): ChatMessage[] {
-  const contextFiles = request.contextFiles.slice(0, 20);
+  const contextFiles = request.contextFiles.slice(0, MAX_CONTEXT_FILES);
   if (contextFiles.length === 0) return request.messages;
 
   return [
@@ -474,9 +475,6 @@ function numberField(value: unknown): number | undefined {
 }
 
 function windowedTimeout(controller: AbortController, timeoutMs: number): NodeJS.Timeout {
-  return setTimeout(() => controller.abort(), Math.max(1000, Math.min(timeoutMs, 300000)));
+  return setTimeout(() => controller.abort(), Math.max(MIN_TIMEOUT_MS, Math.min(timeoutMs, MAX_TIMEOUT_MS)));
 }
 
-function elapsed(start: number): number {
-  return Number((performance.now() - start).toFixed(3));
-}

@@ -218,6 +218,11 @@ function sanitizeRouterMessage(message: string): string {
   let compact = message.replace(/\s+/g, " ").trim();
   compact = compact.replace(/\s*See https?:\/\/\S+.*/i, "");
 
+  // Redact API keys and tokens from error messages
+  compact = compact.replace(/Bearer\s+[\w\-\.]+/gi, "Bearer [REDACTED]");
+  compact = compact.replace(/sk-(?:proj-)?[A-Za-z0-9_-]{20,}/g, "sk-[REDACTED]");
+  compact = compact.replace(/api[_-]?key["\s:=]+[\w\-\.]+/gi, "api_key=[REDACTED]");
+
   if (/invalid authentication credentials/i.test(compact)) {
     return "invalid authentication credentials";
   }
