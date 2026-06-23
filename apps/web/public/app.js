@@ -39,6 +39,7 @@ const els = {
   openFiles: document.querySelector("#open-files"),
   changedFiles: document.querySelector("#changed-files"),
   diffLines: document.querySelector("#diff-lines"),
+  executeTask: document.querySelector("#execute-task"),
   runMode: document.querySelector("#run-mode"),
   fixedAgent: document.querySelector("#fixed-agent"),
   routeButton: document.querySelector("#route-button"),
@@ -327,6 +328,7 @@ function renderRoutes(routes) {
   for (const route of routes) {
     const decision = route.decision || {};
     const verdict = route.verdict || {};
+    const metrics = route.metrics || {};
     const row = document.createElement("article");
     row.className = "route-row";
     row.innerHTML = `
@@ -348,6 +350,7 @@ function renderRoutes(routes) {
         <span class="badge">out ${Number(route.estimatedOutputTokens || 0)}</span>
         <span class="badge">time ${Number(route.timings?.totalRequestMs || 0).toFixed(1)}ms</span>
         <span class="badge ${route.contextBudgetWarning ? "danger" : ""}">ctx ${Number(route.contextEstimateTokens || 0)}</span>
+        ${renderExecutionBadges(metrics)}
         ${renderWarnings(decision.warnings || [])}
       </div>
     `;
@@ -368,6 +371,19 @@ function renderAgentOptions() {
 
 function renderWarnings(warnings) {
   return warnings.map((warning) => `<span class="badge warn">${escapeHtml(warning)}</span>`).join("");
+}
+
+function renderExecutionBadges(metrics) {
+  if (!metrics.executionStatus) return "";
+  const statusClass = metrics.executionStatus === "success" ? "agent" : "danger";
+  return [
+    `<span class="badge ${statusClass}">exec ${escapeHtml(metrics.executionStatus)}</span>`,
+    metrics.executionModel ? `<span class="badge">${escapeHtml(metrics.executionModel)}</span>` : "",
+    metrics.executionProvider ? `<span class="badge">${escapeHtml(metrics.executionProvider)}</span>` : "",
+    metrics.executionLatencyMs ? `<span class="badge">exec ${Number(metrics.executionLatencyMs).toFixed(1)}ms</span>` : "",
+    metrics.actualInputTokens ? `<span class="badge">actual in ${Number(metrics.actualInputTokens)}</span>` : "",
+    metrics.actualOutputTokens ? `<span class="badge">actual out ${Number(metrics.actualOutputTokens)}</span>` : ""
+  ].join("");
 }
 
 function renderTools(tools) {
@@ -418,7 +434,8 @@ function buildTaskPayload() {
     fixedAgent: els.fixedAgent.value,
     openFiles: lines(els.openFiles.value),
     changedFiles: lines(els.changedFiles.value),
-    diffLines: Number(els.diffLines.value || 0)
+    diffLines: Number(els.diffLines.value || 0),
+    execute: Boolean(els.executeTask.checked)
   };
 }
 

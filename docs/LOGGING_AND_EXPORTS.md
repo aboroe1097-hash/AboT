@@ -54,6 +54,8 @@ Each route stores:
 - full decision JSON
 - per-step timings
 - metrics JSON
+- execution status/provider/model, when `execute=true`
+- actual provider token usage, when returned by the provider
 
 ## Timings
 
@@ -70,6 +72,7 @@ contextMs       context scoring and token estimate time
 resolveMs       agent resolution and guardrail time
 affinityMs      session affinity check
 dbLogMs         SQLite route write/update time
+executionMs     model execution time, if execute=true
 totalPlanMs     core planning total
 totalRequestMs  full /api/route server handling time
 ```
@@ -89,12 +92,14 @@ estimatedOutputTokens   rough expected output by complexity
 
 These are estimates, not provider-reported usage. The v0.01 estimator uses `Math.ceil(text.length / 3.5)`, which is a rough English/code heuristic. It is good enough for warnings and comparisons, but it will not match every language or provider tokenizer.
 
-When real model execution is added, actual provider token usage should be appended as:
+When model execution is enabled, provider-reported token usage is appended as:
 
 ```txt
 actualInputTokens
 actualOutputTokens
-actualCostUsd
+executionLatencyMs
+executionProvider
+executionModel
 ```
 
 ## Export Endpoints
@@ -157,4 +162,4 @@ curl -X POST http://127.0.0.1:3217/api/route \
    - `planningMs`
    - route warnings
 
-For real execution later, add provider-reported latency and actual token usage to the same row.
+For execution comparisons, use the estimated fields to compare planned cost and the actual fields to compare provider-reported usage.

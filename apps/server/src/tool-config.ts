@@ -1,6 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { getEnvLlmRouterOptions } from "@abot/core";
+import { getOpenAgentConfigPath } from "@abot/executor";
 
 export interface ApiToolConfig {
   id: string;
@@ -49,6 +50,16 @@ export function getApiToolStatuses(config = readApiTools()): ApiToolStatus[] {
       };
     }
 
+    if (tool.id === "execution") {
+      const missingEnv = getExecutionMissingEnv();
+      return {
+        ...tool,
+        kind: "openai-compatible-executor",
+        configured: missingEnv.length === 0,
+        missingEnv
+      };
+    }
+
     const envNames = [tool.baseUrlEnv, tool.apiKeyEnv, tool.modelEnv].filter(Boolean) as string[];
     const missingEnv = envNames.filter((name) => !process.env[name]);
     return {
@@ -57,6 +68,15 @@ export function getApiToolStatuses(config = readApiTools()): ApiToolStatus[] {
       missingEnv
     };
   });
+}
+
+function getExecutionMissingEnv(): string[] {
+  const missing: string[] = [];
+  if (!existsSync(getOpenAgentConfigPath())) missing.push("ABOT_OPENAGENT_CONFIG");
+  if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY && !process.env.OPENROUTER_API_KEY && !process.env.OPENCODE_GO_BASE_URL) {
+    missing.push("OPENAI_API_KEY or GEMINI_API_KEY or OPENROUTER_API_KEY or OPENCODE_GO_BASE_URL");
+  }
+  return missing;
 }
 
 function getRouterMissingEnv(): string[] {

@@ -194,7 +194,7 @@ label span {
 
 .composer-options {
   display: grid;
-  grid-template-columns: auto auto minmax(140px, 180px) minmax(150px, 220px) 82px 1fr;
+  grid-template-columns: auto auto minmax(130px, 170px) minmax(140px, 200px) 72px auto 1fr;
   align-items: end;
   gap: 9px;
 }
@@ -226,6 +226,26 @@ label span {
 .compact-field input {
   min-height: 30px;
   padding: 4px 8px;
+}
+
+.execute-toggle {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.execute-toggle input {
+  width: auto;
+  margin: 0;
+}
+
+.execute-toggle span {
+  margin: 0;
+  font-size: 13px;
 }
 
 .composer-actions {
@@ -499,6 +519,7 @@ label span {
   }
 
   .diff-field,
+  .execute-toggle,
   .composer-actions {
     grid-column: span 2;
   }

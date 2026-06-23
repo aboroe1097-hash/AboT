@@ -12,9 +12,8 @@
     {
       "id": "execution",
       "label": "Task execution adapter",
-      "kind": "dry-run",
-      "enabled": true
+      "kind": "openai-compatible-executor",
+      "enabled": false
     }
   ]
 }
-

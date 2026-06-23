@@ -6,6 +6,7 @@ import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { getEnvLlmRouterOptions, planFixedAgent, planTaskWithFallback, type PlannedTask } from "@abot/core";
 import { estimateTokenCount } from "@abot/context";
+import { executeAgentTask, ExecutionError } from "@abot/executor";
 import { SqliteAboTStore, type ProjectRecord, type RouteEventRecord } from "@abot/memory";
 import { AGENT_NAMES, getAgentCostUnits, type AgentName } from "@abot/router";
 import { getApiToolStatuses, readApiTools, writeApiTools, type ApiToolsFile } from "./tool-config.js";
@@ -29,6 +30,8 @@ export interface RouteRequest {
   openFiles?: string[];
   changedFiles?: string[];
   diffLines?: number;
+  execute?: boolean;
+  executionTimeoutMs?: number;
 }
 
 export interface RouteResponse {
@@ -147,20 +150,24 @@ async function handleRequest(input: {
       role: "user",
       content: body.task
     });
+    const execution = body.execute
+      ? await executeAndLog(store, result, Number(body.executionTimeoutMs ?? 120000))
+      : {
+          status: "dry-run",
+          content: buildDryRunAssistantMessage(result),
+          note: "Execution is off. Enable execute=true to call the selected model."
+        };
     const assistantMessage = store.addChatMessage({
       projectId: result.project.id,
       routeEventId: result.route.id,
       role: "assistant",
-      content: buildDryRunAssistantMessage(result)
+      content: execution.content
     });
 
     sendJson(response, 200, {
       ...result,
       messages: [userMessage, assistantMessage],
-      execution: {
-        status: "dry-run",
-        note: "v0.01 routes and logs tasks. Provider execution is pluggable through API tools."
-      }
+      execution
     });
     return;
   }
@@ -456,6 +463,113 @@ function getProjectOrThrow(store: SqliteAboTStore, projectId: string | undefined
   return project;
 }
 
+async function executeAndLog(
+  store: SqliteAboTStore,
+  result: RouteResponse,
+  timeoutMs: number
+): Promise<Record<string, unknown> & { status: string; content: string }> {
+  const executionStart = performance.now();
+
+  try {
+    const execution = await executeAgentTask({
+      agent: result.planned.decision.agent,
+      messages: buildExecutionMessages(result),
+      contextBudgetTokens: result.planned.decision.contextBudgetTokens,
+      contextFiles: result.planned.context,
+      timeoutMs
+    });
+    const executionMs = elapsed(executionStart);
+    const content = execution.content || "(Provider returned an empty response.)";
+
+    updateExecutionTelemetry(store, result.route, {
+      executionStatus: "success",
+      executionProvider: execution.provider,
+      executionModel: execution.model,
+      executionVariant: execution.variant,
+      executionFinishReason: execution.finishReason,
+      executionLatencyMs: execution.latencyMs,
+      executionTotalMs: executionMs,
+      actualInputTokens: execution.inputTokens,
+      actualOutputTokens: execution.outputTokens,
+      executionAttempts: execution.attemptedModels
+    });
+
+    return {
+      status: "executed",
+      content,
+      provider: execution.provider,
+      model: execution.model,
+      variant: execution.variant,
+      inputTokens: execution.inputTokens,
+      outputTokens: execution.outputTokens,
+      latencyMs: execution.latencyMs,
+      finishReason: execution.finishReason,
+      attemptedModels: execution.attemptedModels
+    };
+  } catch (error) {
+    const executionMs = elapsed(executionStart);
+    const attempts = error instanceof ExecutionError ? error.details.attempts ?? [] : [];
+    const message = error instanceof Error ? error.message : "Unknown execution error";
+
+    updateExecutionTelemetry(store, result.route, {
+      executionStatus: "failed",
+      executionError: message,
+      executionTotalMs: executionMs,
+      executionAttempts: attempts
+    });
+
+    return {
+      status: "failed",
+      content: [
+        "Execution failed after routing.",
+        `Selected agent: ${result.planned.decision.agent}`,
+        `Reason: ${message}`,
+        "The route was still logged, and you can retry with fixed-agent mode or another provider."
+      ].join("\n"),
+      error: message,
+      attemptedModels: attempts
+    };
+  }
+}
+
+function buildExecutionMessages(result: RouteResponse): Array<{ role: "system" | "user" | "assistant"; content: string }> {
+  return [
+    {
+      role: "system",
+      content: [
+        `You are AboT executing as agent ${result.planned.decision.agent}.`,
+        `Router intent: ${result.planned.verdict.intent}. Complexity: ${result.planned.verdict.complexity}.`,
+        "This execution call can answer and reason, but it cannot directly modify local files yet.",
+        "If code changes are needed, provide concise exact edits or commands to run."
+      ].join("\n")
+    },
+    {
+      role: "user",
+      content: result.route.task
+    }
+  ];
+}
+
+function updateExecutionTelemetry(
+  store: SqliteAboTStore,
+  route: RouteEventRecord,
+  executionMetrics: Record<string, unknown>
+): void {
+  route.timings = {
+    ...route.timings,
+    executionMs: typeof executionMetrics.executionTotalMs === "number" ? executionMetrics.executionTotalMs : 0
+  };
+  route.metrics = {
+    ...route.metrics,
+    ...executionMetrics
+  };
+  store.updateRouteTelemetry({
+    id: route.id,
+    timings: route.timings,
+    metrics: route.metrics
+  });
+}
+
 function buildDryRunAssistantMessage(result: RouteResponse): string {
   const { verdict, decision, contextBudgetWarning } = result.planned;
   const warnings = decision.warnings.length > 0 ? ` Warnings: ${decision.warnings.join(", ")}.` : "";
@@ -649,12 +763,19 @@ function routesToCsv(routes: RouteEventRecord[]): string {
     "contextMs",
     "resolveMs",
     "dbLogMs",
+    "executionStatus",
+    "executionProvider",
+    "executionModel",
+    "executionLatencyMs",
+    "actualInputTokens",
+    "actualOutputTokens",
     "warnings",
     "task"
   ];
 
   const rows = routes.map((route) => {
     const verdict = route.verdict as { intent?: string; complexity?: string };
+    const metrics = route.metrics ?? {};
     return [
       route.id,
       route.createdAt,
@@ -679,6 +800,12 @@ function routesToCsv(routes: RouteEventRecord[]): string {
       route.timings.contextMs ?? "",
       route.timings.resolveMs ?? "",
       route.timings.dbLogMs ?? "",
+      metrics.executionStatus ?? "",
+      metrics.executionProvider ?? "",
+      metrics.executionModel ?? "",
+      metrics.executionLatencyMs ?? "",
+      metrics.actualInputTokens ?? "",
+      metrics.actualOutputTokens ?? "",
       route.decision.warnings.join(";"),
       route.task
     ];

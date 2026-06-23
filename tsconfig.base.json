@@ -13,6 +13,7 @@
       "@abot/agents": ["packages/agents/src/index.ts"],
       "@abot/context": ["packages/context/src/index.ts"],
       "@abot/core": ["packages/core/src/index.ts"],
+      "@abot/executor": ["packages/executor/src/index.ts"],
       "@abot/memory": ["packages/memory/src/index.ts"],
       "@abot/router": ["packages/router/src/index.ts"],
       "@abot/server": ["apps/server/src/server.ts"]

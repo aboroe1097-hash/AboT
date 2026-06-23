@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@abot/core": "0.1.0",
+    "@abot/executor": "0.1.0",
     "@abot/memory": "0.1.0",
     "@abot/router": "0.1.0"
   },

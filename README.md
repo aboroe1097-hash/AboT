@@ -107,6 +107,33 @@ npm run dev
 
 This uses Gemini's OpenAI-compatible chat endpoint with `gemini-3.1-flash-lite` by default. You can also set `ABOT_ROUTER_MODEL=gemini-3.5-flash` if you want a stronger router classifier.
 
+## Model Execution
+
+`Send` is safe by default: it routes and logs a dry-run. Tick `Execute` in the composer when you want AboT to call the selected model.
+
+Execution reads the selected agent's primary and fallback models from:
+
+```txt
+ABOT_OPENAGENT_CONFIG
+```
+
+If unset, AboT tries:
+
+```txt
+%USERPROFILE%\.config\opencode\oh-my-openagent.json
+```
+
+Model strings map to environment keys at runtime:
+
+```txt
+openai/gpt-5.5                  -> OPENAI_API_KEY
+google/gemini-3.1-pro-preview   -> GEMINI_API_KEY
+openrouter/...                  -> OPENROUTER_API_KEY
+opencode-go/...                 -> OPENCODE_GO_BASE_URL and optional OPENCODE_GO_API_KEY
+```
+
+Execution metrics are appended to route logs as `executionStatus`, `executionProvider`, `executionModel`, `actualInputTokens`, `actualOutputTokens`, and `executionLatencyMs`.
+
 ## OpenCode Hook
 
 ```txt

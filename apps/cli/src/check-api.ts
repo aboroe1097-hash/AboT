@@ -78,7 +78,7 @@ try {
     throw new Error("Expected fixed-agent baseline to force atlas");
   }
 
-  await expectOk(
+  const chat = await expectOk(
     "chat",
     fetchJson(`${baseUrl}/api/chat`, {
       method: "POST",
@@ -91,6 +91,7 @@ try {
       }
     })
   );
+  if (chat.execution.status !== "dry-run") throw new Error("Expected chat to default to dry-run");
 
   const tools = await expectOk("tools", fetchJson(`${baseUrl}/api/tools`));
   if (!Array.isArray(tools.tools)) throw new Error("Expected tools array");
@@ -158,7 +159,7 @@ try {
   }
 
   const exportedCsv = await fetchText(`${baseUrl}/api/export/routes?projectId=${projectId}&format=csv`);
-  if (!exportedCsv.includes("totalRequestMs") || !exportedCsv.includes("fixed_agent")) {
+  if (!exportedCsv.includes("totalRequestMs") || !exportedCsv.includes("fixed_agent") || !exportedCsv.includes("executionStatus")) {
     throw new Error("Expected CSV export with timing and fixed-agent fields");
   }
   console.log("PASS export csv");
