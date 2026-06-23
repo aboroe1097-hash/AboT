@@ -87,6 +87,33 @@ describe("executeAgentTask", () => {
     expect(result.model).toBe("google/gemini-override");
     expect(fetchMock).toHaveBeenCalledOnce();
   });
+
+  it("uses the auto Gemini lane for lightweight agents", async () => {
+    process.env.ABOT_EXECUTION_ADAPTER = "auto";
+    process.env.ABOT_EXECUTION_FALLBACK_MODEL = "google/gemini-lite";
+    process.env.GEMINI_API_KEY = "valid";
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonResponse(200, {
+        choices: [{ message: { content: "gemini lane" }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 6, completion_tokens: 2 }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await executeAgentTask({
+      agent: "unspecified-low",
+      configPath: "does-not-exist.json",
+      contextBudgetTokens: 2000,
+      contextFiles: [],
+      messages: [{ role: "user", content: "hello" }]
+    });
+
+    expect(result.content).toBe("gemini lane");
+    expect(result.model).toBe("google/gemini-lite");
+    expect(result.provider).toBe("google");
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
 });
 
 function jsonResponse(status: number, body: unknown): Response {

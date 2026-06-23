@@ -5,16 +5,19 @@ import { performance } from "node:perf_hooks";
 import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import {
+  classifyWithLlmFallback,
+  formatLlmRouterFailure,
   GEMINI_OPENAI_COMPAT_BASE_URL,
   getEnvLlmRouterOptions,
   planFixedAgent,
   planTaskWithFallback,
+  type LlmRouterDiagnostics,
   type PlannedTask
 } from "@abot/core";
 import { estimateTokenCount } from "@abot/context";
 import { executeAgentTask, executeTask, ExecutionError, getOpenAgentConfigPath } from "@abot/executor";
 import { SqliteAboTStore, type ProjectRecord, type RouteEventRecord } from "@abot/memory";
-import { AGENT_NAMES, getAgentCostUnits, type AgentName } from "@abot/router";
+import { AGENT_NAMES, getAgentCostUnits, type AgentName, type RouterVerdict } from "@abot/router";
 import { writeLocalEnvValues } from "./env.js";
 import { getApiToolStatuses, readApiTools, writeApiTools, type ApiToolsFile } from "./tool-config.js";
 
@@ -54,7 +57,7 @@ export interface ApiSetupRequest {
   routerBaseUrl?: string;
   routerApiKey?: string;
   openAgentConfig?: string;
-  executionProvider?: "codex-cli" | "gemini" | "openai" | "openrouter" | "opencode-go";
+  executionProvider?: "auto" | "codex-cli" | "gemini" | "openai" | "openrouter" | "opencode-go";
   executionModel?: string;
   executionApiKey?: string;
   opencodeGoBaseUrl?: string;
@@ -231,11 +234,13 @@ async function handleRequest(input: {
   }
 
   if (request.method === "POST" && url.pathname === "/api/setup/confirm") {
+    const routerProbe = await probeRouterModel();
     const executionProbe = await probeExecutionModel();
     sendJson(response, 200, {
       ok: true,
       setup: {
         ...getSetupStatus(),
+        routerProbe,
         executionProbe
       }
     });
@@ -673,7 +678,7 @@ function sendText(response: ServerResponse, statusCode: number, payload: string,
 }
 
 function serveStatic(response: ServerResponse, webRoot: string, pathname: string): void {
-  const safePath = pathname === "/" ? "/index.html" : pathname;
+  const safePath = pathname === "/" ? "/index.html" : pathname === "/favicon.ico" ? "/favicon.svg" : pathname;
   const filePath = resolve(join(webRoot, safePath));
 
   if (!filePath.startsWith(resolve(webRoot)) || !existsSync(filePath)) {
@@ -699,6 +704,8 @@ function getMimeType(filePath: string): string {
       return "text/javascript; charset=utf-8";
     case ".json":
       return "application/json; charset=utf-8";
+    case ".svg":
+      return "image/svg+xml; charset=utf-8";
     default:
       return "application/octet-stream";
   }
@@ -826,7 +833,8 @@ function getSetupStatus(): Record<string, unknown> {
       openAgentConfigPath,
       openAgentConfigExists: existsSync(openAgentConfigPath),
       providers: {
-        codexCli: process.env.ABOT_EXECUTION_ADAPTER === "codex-cli",
+        auto: process.env.ABOT_EXECUTION_ADAPTER === "auto",
+        codexCli: process.env.ABOT_EXECUTION_ADAPTER === "codex-cli" || process.env.ABOT_EXECUTION_ADAPTER === "auto",
         gemini: Boolean(process.env.GEMINI_API_KEY),
         openai: Boolean(process.env.OPENAI_API_KEY),
         openrouter: Boolean(process.env.OPENROUTER_API_KEY),
@@ -835,18 +843,83 @@ function getSetupStatus(): Record<string, unknown> {
       adapter: process.env.ABOT_EXECUTION_ADAPTER ?? "openai-compatible",
       codexModel: process.env.ABOT_CODEX_MODEL ?? "",
       modelOverride: process.env.ABOT_EXECUTION_MODEL ?? "",
+      fallbackModel: process.env.ABOT_EXECUTION_FALLBACK_MODEL ?? "",
       missingEnv: executionTool?.missingEnv ?? []
     },
     tools
   };
 }
 
+async function probeRouterModel(): Promise<Record<string, unknown>> {
+  const router = getEnvLlmRouterOptions();
+  const started = performance.now();
+
+  if (!router.enabled || !router.baseUrl || !router.apiKey || !router.model) {
+    return {
+      ok: false,
+      skipped: true,
+      provider: router.provider,
+      model: router.model ?? "",
+      message: "Set a router model and API key to run a live confirm test."
+    };
+  }
+
+  const verdict: RouterVerdict = {
+    phase: "llm_fallback_needed",
+    intent: "code_impl",
+    complexity: "low",
+    scope: "execution",
+    confidence: 0.35,
+    deterministicScore: 0.35,
+    suggestedAgent: "atlas",
+    candidateAgents: ["atlas", "unspecified-high"],
+    intentScores: {
+      code_impl: 0.35
+    },
+    secondaryIntents: [],
+    multiIntent: false,
+    signals: ["probe:router"],
+    reason: "Router live probe"
+  };
+  const diagnostics: LlmRouterDiagnostics = {};
+  const choice = await classifyWithLlmFallback(
+    {
+      task: "Check whether the AboT router API is working.",
+      openFiles: [],
+      changedFiles: [],
+      diffLines: 0
+    },
+    verdict,
+    router,
+    diagnostics
+  );
+
+  if (choice) {
+    return {
+      ok: true,
+      provider: router.provider,
+      model: router.model,
+      selectedAgent: choice.agent,
+      latencyMs: elapsed(started)
+    };
+  }
+
+  return {
+    ok: false,
+    provider: router.provider,
+    model: router.model,
+    statusCode: diagnostics.failure?.statusCode,
+    message: formatLlmRouterFailure(diagnostics.failure),
+    latencyMs: elapsed(started)
+  };
+}
+
 async function probeExecutionModel(): Promise<Record<string, unknown>> {
   const model = process.env.ABOT_EXECUTION_MODEL?.trim();
-  if (process.env.ABOT_EXECUTION_ADAPTER === "codex-cli") {
+  if (process.env.ABOT_EXECUTION_ADAPTER === "codex-cli" || process.env.ABOT_EXECUTION_ADAPTER === "auto") {
     try {
       const result = await executeAgentTask({
-        agent: "unspecified-high",
+        agent: process.env.ABOT_EXECUTION_ADAPTER === "auto" ? "unspecified-low" : "unspecified-high",
         messages: [{ role: "user", content: "Reply with exactly ok. Do not modify files." }],
         contextBudgetTokens: 0,
         contextFiles: [],
@@ -860,7 +933,8 @@ async function probeExecutionModel(): Promise<Record<string, unknown>> {
         provider: result.provider,
         latencyMs: result.latencyMs,
         inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens
+        outputTokens: result.outputTokens,
+        attemptedModels: result.attemptedModels
       };
     } catch (error) {
       const executionError = error instanceof ExecutionError ? error : undefined;
@@ -933,10 +1007,17 @@ function buildSetupEnvUpdates(body: ApiSetupRequest): Record<string, string | un
   }
 
   const executionApiKey = nonEmpty(body.executionApiKey);
-  updates.ABOT_EXECUTION_ADAPTER = body.executionProvider === "codex-cli" ? "codex-cli" : "openai-compatible";
-  updates.ABOT_CODEX_MODEL = body.executionProvider === "codex-cli" ? nonEmpty(body.executionModel) : undefined;
+  updates.ABOT_EXECUTION_ADAPTER =
+    body.executionProvider === "auto" ? "auto" : body.executionProvider === "codex-cli" ? "codex-cli" : "openai-compatible";
+  updates.ABOT_CODEX_MODEL = body.executionProvider === "codex-cli" || body.executionProvider === "auto"
+    ? nonEmpty(body.executionModel)
+    : undefined;
   updates.ABOT_EXECUTION_MODEL = normalizeExecutionModel(body.executionProvider, body.executionModel);
+  updates.ABOT_EXECUTION_FALLBACK_MODEL = body.executionProvider === "auto"
+    ? normalizeExecutionModel("gemini", body.routerModel || "gemini-3.1-flash-lite")
+    : undefined;
   switch (body.executionProvider) {
+    case "auto":
     case "gemini":
       updates.GEMINI_API_KEY = executionApiKey;
       break;
@@ -964,6 +1045,7 @@ function normalizeExecutionModel(provider: ApiSetupRequest["executionProvider"],
   switch (provider) {
     case "gemini":
       return `google/${model}`;
+    case "auto":
     case "codex-cli":
       return `codex/${model}`;
     case "openai":
@@ -1009,6 +1091,9 @@ function routesToCsv(routes: RouteEventRecord[]): string {
     "estimatedOutputTokens",
     "contextBudgetTokens",
     "contextBudgetWarning",
+    "llmFallbackUsed",
+    "budgetRemainingBefore",
+    "budgetRemainingAfter",
     "totalRequestMs",
     "planningMs",
     "classifyMs",
@@ -1020,8 +1105,13 @@ function routesToCsv(routes: RouteEventRecord[]): string {
     "executionProvider",
     "executionModel",
     "executionLatencyMs",
+    "executionTotalMs",
+    "executionFinishReason",
+    "executionError",
+    "executionAttempts",
     "actualInputTokens",
     "actualOutputTokens",
+    "decisionReason",
     "warnings",
     "task"
   ];
@@ -1046,6 +1136,9 @@ function routesToCsv(routes: RouteEventRecord[]): string {
       route.estimatedOutputTokens,
       route.decision.contextBudgetTokens,
       route.contextBudgetWarning,
+      metrics.llmFallbackUsed ?? "",
+      metrics.budgetRemainingBefore ?? "",
+      metrics.budgetRemainingAfter ?? "",
       route.timings.totalRequestMs ?? "",
       route.timings.planningMs ?? "",
       route.timings.classifyMs ?? "",
@@ -1057,8 +1150,13 @@ function routesToCsv(routes: RouteEventRecord[]): string {
       metrics.executionProvider ?? "",
       metrics.executionModel ?? "",
       metrics.executionLatencyMs ?? "",
+      metrics.executionTotalMs ?? "",
+      metrics.executionFinishReason ?? "",
+      metrics.executionError ?? "",
+      formatCsvJson(metrics.executionAttempts),
       metrics.actualInputTokens ?? "",
       metrics.actualOutputTokens ?? "",
+      route.decision.reason,
       route.decision.warnings.join(";"),
       route.task
     ];
@@ -1070,4 +1168,9 @@ function routesToCsv(routes: RouteEventRecord[]): string {
 function csvCell(value: unknown): string {
   const text = String(value ?? "");
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function formatCsvJson(value: unknown): string {
+  if (value === undefined || value === null || value === "") return "";
+  return JSON.stringify(value);
 }

@@ -34,12 +34,52 @@ export async function executeAgentTask(request: AgentExecutionRequest): Promise<
     return executeCodexCliTask(request);
   }
 
+  if (process.env.ABOT_EXECUTION_ADAPTER === "auto") {
+    return executeAutoTask(request);
+  }
+
   const candidates = getExecutionCandidates(request);
+  return executeApiCandidates(request, candidates);
+}
+
+async function executeAutoTask(request: AgentExecutionRequest): Promise<ExecutionResult> {
+  const apiCandidates = getAutoApiCandidates();
+  const preferApi = shouldPreferApiExecution(request.agent);
+  const attempts: AgentModelAttempt[] = [];
+
+  if (preferApi && apiCandidates.length > 0) {
+    try {
+      return await executeApiCandidates(request, apiCandidates, attempts);
+    } catch (error) {
+      attempts.push(...readAttempts(error));
+    }
+  }
+
+  try {
+    const codex = await executeCodexCliTask(request);
+    return {
+      ...codex,
+      attemptedModels: [...attempts, ...codex.attemptedModels]
+    };
+  } catch (error) {
+    attempts.push(...readAttempts(error));
+    if (!preferApi && apiCandidates.length > 0) {
+      return await executeApiCandidates(request, apiCandidates, attempts);
+    }
+    throw new ExecutionError("All auto execution models failed", { attempts });
+  }
+}
+
+async function executeApiCandidates(
+  request: AgentExecutionRequest,
+  candidates: AgentModelCandidate[],
+  priorAttempts: AgentModelAttempt[] = []
+): Promise<ExecutionResult> {
   if (candidates.length === 0) {
     throw new ExecutionError(`No model configured for agent ${request.agent}`);
   }
 
-  const attempts: AgentModelAttempt[] = [];
+  const attempts: AgentModelAttempt[] = [...priorAttempts];
   const maxAttempts = Math.max(1, Math.min(request.maxFallbackAttempts ?? candidates.length, candidates.length));
 
   for (const candidate of candidates.slice(0, maxAttempts)) {
@@ -225,6 +265,37 @@ function getExecutionCandidates(request: AgentExecutionRequest): AgentModelCandi
   }
 
   return getAgentModelCandidates(request.agent, request.configPath);
+}
+
+function getAutoApiCandidates(): AgentModelCandidate[] {
+  const configured = process.env.ABOT_EXECUTION_FALLBACK_MODEL?.trim();
+  const routerModel = process.env.ABOT_ROUTER_MODEL?.trim();
+  const model = configured || (routerModel ? `google/${routerModel}` : undefined);
+  if (!model) return [];
+
+  return [
+    {
+      model,
+      variant: process.env.ABOT_EXECUTION_FALLBACK_VARIANT?.trim() || undefined,
+      source: "fallback",
+      index: 0
+    }
+  ];
+}
+
+function shouldPreferApiExecution(agent: string): boolean {
+  return new Set([
+    "quick",
+    "unspecified-low",
+    "writing",
+    "librarian",
+    "oracle",
+    "momus"
+  ]).has(agent);
+}
+
+function readAttempts(error: unknown): AgentModelAttempt[] {
+  return error instanceof ExecutionError && error.details.attempts?.length ? error.details.attempts : [];
 }
 
 export async function executeTask(request: ExecutionRequest): Promise<ExecutionResult> {

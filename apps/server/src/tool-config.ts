@@ -73,6 +73,7 @@ export function getApiToolStatuses(config = readApiTools()): ApiToolStatus[] {
 function getExecutionMissingEnv(): string[] {
   const missing: string[] = [];
   if (process.env.ABOT_EXECUTION_ADAPTER === "codex-cli") return missing;
+  if (process.env.ABOT_EXECUTION_ADAPTER === "auto") return missing;
 
   const modelOverride = process.env.ABOT_EXECUTION_MODEL?.trim();
 

@@ -9,7 +9,14 @@ import {
   type RouterInput,
   type RouterVerdict
 } from "@abot/router";
-import { classifyWithLlmFallback, getEnvLlmRouterOptions, type LlmRouterOptions } from "./llm-router.js";
+import {
+  classifyWithLlmFallback,
+  formatLlmRouterFailure,
+  getEnvLlmRouterOptions,
+  type LlmRouterDiagnostics,
+  type LlmRouterFailure,
+  type LlmRouterOptions
+} from "./llm-router.js";
 
 export interface PlanTaskInput extends RouterInput {
   contextCandidates?: ContextCandidate[];
@@ -68,11 +75,19 @@ export async function planTaskWithFallback(input: PlanTaskInput, options: PlanTa
   let verdict = initial;
   let llmFallbackUsed = false;
   let llmFallbackMs = 0;
+  let llmFallbackFailure: LlmRouterFailure | undefined;
 
   if (initial.phase === "llm_fallback_needed") {
     const llmStart = performance.now();
-    const llmChoice = await classifyWithLlmFallback(input, initial, options.llmRouter ?? getEnvLlmRouterOptions());
+    const diagnostics: LlmRouterDiagnostics = {};
+    const llmChoice = await classifyWithLlmFallback(
+      input,
+      initial,
+      options.llmRouter ?? getEnvLlmRouterOptions(),
+      diagnostics
+    );
     llmFallbackMs = elapsed(llmStart);
+    llmFallbackFailure = diagnostics.failure;
 
     if (llmChoice) {
       llmFallbackUsed = true;
@@ -92,7 +107,15 @@ export async function planTaskWithFallback(input: PlanTaskInput, options: PlanTa
   const contextEstimateTokens = estimateContextTokens(input.contextCandidates ?? []);
   const contextMs = elapsed(contextStart);
   const resolveStart = performance.now();
-  const decision = resolveAgent(verdict, options.routingOptions);
+  let decision = resolveAgent(verdict, options.routingOptions);
+  if (!llmFallbackUsed && llmFallbackFailure && initial.phase === "llm_fallback_needed") {
+    const statusWarning = llmFallbackFailure.statusCode ? `llm-fallback-failed:${llmFallbackFailure.statusCode}` : "llm-fallback-failed";
+    decision = {
+      ...decision,
+      reason: `Router LLM fallback failed; using strong general fallback. ${formatLlmRouterFailure(llmFallbackFailure)}`,
+      warnings: [...new Set([...decision.warnings, statusWarning])]
+    };
+  }
   const resolveMs = elapsed(resolveStart);
 
   return {

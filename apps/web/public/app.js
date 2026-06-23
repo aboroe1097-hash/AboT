@@ -188,9 +188,11 @@ async function confirmApiSetup() {
     renderSetup(result.setup);
     await loadHealth();
     const routerOk = Boolean(result.setup?.router?.configured);
+    const routerProbeOk = result.setup?.routerProbe?.skipped ? routerOk : Boolean(result.setup?.routerProbe?.ok);
     const executionOk = Boolean(result.setup?.execution?.configured);
-    const probeOk = result.setup?.executionProbe?.skipped ? executionOk : Boolean(result.setup?.executionProbe?.ok);
-    showToast(routerOk && executionOk && probeOk ? "API ready" : "API needs attention", routerOk && executionOk && probeOk ? "success" : "error");
+    const executionProbeOk = result.setup?.executionProbe?.skipped ? executionOk : Boolean(result.setup?.executionProbe?.ok);
+    const ready = routerOk && routerProbeOk && executionOk && executionProbeOk;
+    showToast(ready ? "API ready" : "API needs attention", ready ? "success" : "error");
   });
 }
 
@@ -301,14 +303,19 @@ function renderSetup(setup) {
   const routerConfigured = Boolean(router.configured);
   const executionConfigured = Boolean(execution.configured);
 
+  const routerProbeFailed = setup.routerProbe && !setup.routerProbe.ok && !setup.routerProbe.skipped;
   const probeFailed = setup.executionProbe && !setup.executionProbe.ok && !setup.executionProbe.skipped;
-  els.apiPill.textContent = !routerConfigured ? "API missing" : probeFailed ? "API blocked" : "API ready";
-  els.apiPill.className = `status-pill ${routerConfigured && !probeFailed ? "ok" : "warn"}`;
+  const probesReady = Boolean(setup.routerProbe && setup.executionProbe);
+  const probesOk = probesReady && !routerProbeFailed && !probeFailed;
+  els.apiPill.textContent = !routerConfigured ? "API missing" : !probesReady ? "API saved" : routerProbeFailed ? "Router blocked" : probeFailed ? "Exec blocked" : "API ready";
+  els.apiPill.className = `status-pill ${routerConfigured && probesOk ? "ok" : "warn"}`;
   els.routerProvider.value = router.provider === "gemini" ? "gemini" : "openai-compatible";
   els.routerModel.value = router.model || els.routerModel.value || "gemini-3.1-flash-lite";
   els.routerBaseUrl.value = router.provider === "gemini" ? "" : router.baseUrl || els.routerBaseUrl.value;
   els.openAgentConfig.value = execution.openAgentConfigPath || els.openAgentConfig.value;
-  els.executionProvider.value = execution.adapter === "codex-cli"
+  els.executionProvider.value = execution.adapter === "auto"
+    ? "auto"
+    : execution.adapter === "codex-cli"
     ? "codex-cli"
     : executionProviderFromModel(execution.modelOverride) || els.executionProvider.value || "gemini";
   els.executionModel.value = execution.codexModel || stripProviderPrefix(execution.modelOverride || els.executionModel.value || router.model || "gpt-5.5");
@@ -316,18 +323,21 @@ function renderSetup(setup) {
 
   els.setupStatus.innerHTML = [
     statusLine("Router", routerConfigured, router.model || router.provider || "missing"),
-    statusLine("Single Model", Boolean(execution.modelOverride), execution.modelOverride || "OpenAgent chain"),
+    statusLine(execution.adapter === "auto" ? "Primary" : "Single Model", Boolean(execution.modelOverride), execution.modelOverride || "OpenAgent chain"),
+    execution.adapter === "auto" ? statusLine("Fallback", Boolean(execution.fallbackModel), execution.fallbackModel || "Gemini not set") : "",
     statusLine("Execution", executionConfigured, execution.openAgentConfigExists ? "config found" : "config missing"),
+    setup.routerProbe ? statusLine("Router Test", Boolean(setup.routerProbe.ok), formatProbe(setup.routerProbe)) : "",
     setup.executionProbe ? statusLine("Live Test", Boolean(setup.executionProbe.ok), formatProbe(setup.executionProbe)) : "",
     statusLine(".env.local", Boolean(setup.envFileIgnored), setup.envFileIgnored ? "ignored" : "check gitignore")
   ].filter(Boolean).join("");
 }
 
 function statusLine(label, ok, detail) {
+  const safeDetail = escapeHtml(detail);
   return `
     <div class="status-line">
       <span>${escapeHtml(label)}</span>
-      <span class="status-pill ${ok ? "ok" : "warn"}">${escapeHtml(detail)}</span>
+      <span class="status-pill ${ok ? "ok" : "warn"}" title="${safeDetail}">${safeDetail}</span>
     </div>
   `;
 }
@@ -341,7 +351,7 @@ function syncSetupFields() {
   if (els.executionProvider.value === "gemini" && !els.executionModel.value.trim()) {
     els.executionModel.value = "gemini-3.1-flash-lite";
   }
-  if (els.executionProvider.value === "codex-cli" && !els.executionModel.value.trim()) {
+  if ((els.executionProvider.value === "codex-cli" || els.executionProvider.value === "auto") && !els.executionModel.value.trim()) {
     els.executionModel.value = "gpt-5.5";
   }
   els.executionApiKeyRow.hidden = els.executionProvider.value === "codex-cli";
@@ -372,7 +382,12 @@ function executionProviderFromModel(model) {
 }
 
 function formatProbe(probe) {
-  if (probe.ok) return `${probe.provider || "provider"} ${Number(probe.latencyMs || 0).toFixed(0)}ms`;
+  if (probe.ok) {
+    const attempts = Array.isArray(probe.attemptedModels) ? probe.attemptedModels.length : 0;
+    const suffix = attempts > 1 ? ` ${attempts} tries` : "";
+    return `${probe.provider || "provider"} ${Number(probe.latencyMs || 0).toFixed(0)}ms${suffix}`;
+  }
+  if (probe.skipped) return probe.message || "not tested";
   return probe.statusCode ? `failed ${probe.statusCode}` : probe.message || "not tested";
 }
 
@@ -383,7 +398,7 @@ function renderMessages(messages) {
     item.className = `message ${message.role}`;
     item.innerHTML = `
       <div class="message-head">
-        <span>${escapeHtml(message.role)} · ${formatDate(message.createdAt)}</span>
+        <span>${escapeHtml(message.role)} - ${formatDate(message.createdAt)}</span>
         <button class="copy-button" type="button">Copy</button>
       </div>
       <div class="message-body">${escapeHtml(message.content)}</div>
@@ -436,7 +451,7 @@ function renderRoutes(routes) {
     row.className = "route-row";
     row.innerHTML = `
       <div class="route-task">${escapeHtml(route.task)}</div>
-      <div class="route-meta">${escapeHtml(decision.agent || "unknown")} · ${escapeHtml(verdict.intent || "intent")} · ${Number(route.timings?.totalRequestMs || 0).toFixed(1)}ms</div>
+      <div class="route-meta">${escapeHtml(decision.agent || "unknown")} - ${escapeHtml(verdict.intent || "intent")} - ${Number(route.timings?.totalRequestMs || 0).toFixed(1)}ms</div>
       <div class="badge-row">
         <span class="badge">${escapeHtml(route.mode || "orchestrated")}</span>
         <span class="badge">${escapeHtml(verdict.complexity || "complexity")}</span>

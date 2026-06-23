@@ -15,6 +15,17 @@ export interface LlmRouterChoice {
   raw?: unknown;
 }
 
+export interface LlmRouterFailure {
+  provider?: LlmRouterOptions["provider"];
+  model?: string;
+  statusCode?: number;
+  message: string;
+}
+
+export interface LlmRouterDiagnostics {
+  failure?: LlmRouterFailure;
+}
+
 export const GEMINI_OPENAI_COMPAT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
 export const GEMINI_DEFAULT_ROUTER_MODEL = "gemini-3.1-flash-lite";
 
@@ -45,9 +56,17 @@ function getRouterProvider(): "openai-compatible" | "gemini" {
 export async function classifyWithLlmFallback(
   input: RouterInput,
   verdict: RouterVerdict,
-  options: LlmRouterOptions = getEnvLlmRouterOptions()
+  options: LlmRouterOptions = getEnvLlmRouterOptions(),
+  diagnostics?: LlmRouterDiagnostics
 ): Promise<LlmRouterChoice | undefined> {
-  if (!options.enabled || !options.baseUrl || !options.apiKey || !options.model) return undefined;
+  if (!options.enabled || !options.baseUrl || !options.apiKey || !options.model) {
+    recordLlmFailure(diagnostics, {
+      provider: options.provider,
+      model: options.model,
+      message: "Router LLM is not fully configured."
+    });
+    return undefined;
+  }
 
   const candidates = [...new Set<AgentName>([...verdict.candidateAgents, "unspecified-high"])];
   const controller = new AbortController();
@@ -78,7 +97,15 @@ export async function classifyWithLlmFallback(
       })
     });
 
-    if (!response.ok) return undefined;
+    if (!response.ok) {
+      recordLlmFailure(diagnostics, {
+        provider: options.provider,
+        model: options.model,
+        statusCode: response.status,
+        message: await readRouterErrorMessage(response)
+      });
+      return undefined;
+    }
 
     const json = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
@@ -86,18 +113,36 @@ export async function classifyWithLlmFallback(
     const content = json.choices?.[0]?.message?.content ?? "";
     const parsed = parseJson(content);
 
-    if (!parsed || !candidates.includes(parsed.agent as AgentName)) return undefined;
+    if (!parsed || !candidates.includes(parsed.agent as AgentName)) {
+      recordLlmFailure(diagnostics, {
+        provider: options.provider,
+        model: options.model,
+        message: "Router LLM returned an invalid routing response."
+      });
+      return undefined;
+    }
 
     return {
       agent: parsed.agent as AgentName,
       reasoning: String(parsed.reasoning ?? "LLM fallback selected the agent."),
       raw: json
     };
-  } catch {
+  } catch (error) {
+    recordLlmFailure(diagnostics, {
+      provider: options.provider,
+      model: options.model,
+      message: error instanceof Error ? error.message : "Router LLM request failed."
+    });
     return undefined;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export function formatLlmRouterFailure(failure: LlmRouterFailure | undefined): string {
+  if (!failure) return "Router LLM failed without details.";
+  const status = failure.statusCode ? `status ${failure.statusCode}: ` : "";
+  return `${status}${failure.message}`;
 }
 
 function buildPrompt(input: RouterInput, verdict: RouterVerdict, candidates: AgentName[]): string {
@@ -134,4 +179,32 @@ function parseJson(content: string): { agent?: string; reasoning?: string } | un
       return undefined;
     }
   }
+}
+
+async function readRouterErrorMessage(response: Response): Promise<string> {
+  try {
+    const text = await response.text();
+    if (!text.trim()) return response.statusText || `HTTP ${response.status}`;
+    try {
+      const json = JSON.parse(text) as { error?: { message?: string }; message?: string };
+      return sanitizeRouterMessage(json.error?.message ?? json.message ?? text);
+    } catch {
+      return sanitizeRouterMessage(text);
+    }
+  } catch {
+    return response.statusText || `HTTP ${response.status}`;
+  }
+}
+
+function recordLlmFailure(diagnostics: LlmRouterDiagnostics | undefined, failure: LlmRouterFailure): void {
+  if (!diagnostics) return;
+  diagnostics.failure = {
+    ...failure,
+    message: sanitizeRouterMessage(failure.message)
+  };
+}
+
+function sanitizeRouterMessage(message: string): string {
+  const compact = message.replace(/\s+/g, " ").trim();
+  return compact.length > 240 ? `${compact.slice(0, 237)}...` : compact;
 }
