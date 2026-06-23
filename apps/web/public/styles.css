@@ -164,6 +164,26 @@ label span {
   align-self: stretch;
 }
 
+.message-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.message-copy {
+  min-height: 24px;
+  padding: 0 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.message-copy:hover {
+  color: var(--text);
+}
+
 .message-body {
   line-height: 1.6;
   white-space: pre-wrap;

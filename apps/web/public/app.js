@@ -311,9 +311,17 @@ function renderMessages(messages) {
     const item = document.createElement("article");
     item.className = `message ${message.role}`;
     item.innerHTML = `
-      <div class="message-meta">${escapeHtml(message.role)} - ${formatDate(message.createdAt)}</div>
+      <div class="message-head">
+        <div class="message-meta">${escapeHtml(message.role)} - ${formatDate(message.createdAt)}</div>
+        <button class="message-copy" type="button" title="Copy message">Copy</button>
+      </div>
       <div class="message-body">${escapeHtml(message.content)}</div>
     `;
+    const copyButton = item.querySelector(".message-copy");
+    copyButton.addEventListener("click", async () => {
+      await copyText(message.content);
+      flashButtonLabel(copyButton, "Copied");
+    });
     els.chatFeed.prepend(item);
   }
 }
