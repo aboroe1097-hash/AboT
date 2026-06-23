@@ -18,6 +18,7 @@ export interface AgentExecutionRequest {
   messages: ChatMessage[];
   contextBudgetTokens: number;
   contextFiles: ScoredContextCandidate[];
+  cwd?: string;
   configPath?: string;
   maxFallbackAttempts?: number;
   timeoutMs?: number;

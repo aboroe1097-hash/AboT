@@ -1,3 +1,7 @@
+import { spawn } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { resolveProviderModel, type ProviderConfig } from "./provider-registry.js";
 import { getAgentModelCandidates } from "./openagent-config.js";
@@ -26,7 +30,11 @@ export class ExecutionError extends Error {
 }
 
 export async function executeAgentTask(request: AgentExecutionRequest): Promise<ExecutionResult> {
-  const candidates = getAgentModelCandidates(request.agent, request.configPath);
+  if (process.env.ABOT_EXECUTION_ADAPTER === "codex-cli") {
+    return executeCodexCliTask(request);
+  }
+
+  const candidates = getExecutionCandidates(request);
   if (candidates.length === 0) {
     throw new ExecutionError(`No model configured for agent ${request.agent}`);
   }
@@ -53,6 +61,170 @@ export async function executeAgentTask(request: AgentExecutionRequest): Promise<
   }
 
   throw new ExecutionError("All execution models failed", { attempts });
+}
+
+export async function executeCodexCliTask(request: AgentExecutionRequest): Promise<ExecutionResult> {
+  const started = performance.now();
+  const model = getCodexModel();
+  const sandbox = process.env.ABOT_CODEX_SANDBOX?.trim() || "workspace-write";
+  const tempDir = mkdtempSync(join(tmpdir(), "abot-codex-"));
+  const outputPath = join(tempDir, "last-message.txt");
+  const env = { ...process.env };
+
+  if (process.env.ABOT_CODEX_USE_OPENAI_API_KEY !== "true") {
+    delete env.OPENAI_API_KEY;
+  }
+
+  try {
+    await runCodexProcess(
+      process.env.ABOT_CODEX_COMMAND?.trim() || "codex",
+      [
+        "exec",
+        "--sandbox",
+        sandbox,
+        "--model",
+        model,
+        "-C",
+        request.cwd || process.cwd(),
+        "-o",
+        outputPath,
+        "-"
+      ],
+      {
+        cwd: request.cwd || process.cwd(),
+        env,
+        timeoutMs: Math.max(1000, Math.min(request.timeoutMs ?? 300000, 600000)),
+        input: buildCodexPrompt(request)
+      }
+    );
+    const latencyMs = elapsed(started);
+    const content = readFileSync(outputPath, "utf8").trim();
+
+    return {
+      agent: request.agent,
+      model: `codex/${model}`,
+      provider: "codex-cli",
+      inputTokens: 0,
+      outputTokens: 0,
+      latencyMs,
+      content: content || "(Codex returned an empty final message.)",
+      finishReason: "stop",
+      attemptedModels: [
+        {
+          model: `codex/${model}`,
+          provider: "codex-cli",
+          ok: true,
+          latencyMs
+        }
+      ]
+    };
+  } catch (error) {
+    const err = error as { code?: number | string; stderr?: string; stdout?: string; message?: string };
+    throw new ExecutionError(summarizeCodexError(err), {
+      provider: "codex-cli",
+      model: `codex/${model}`,
+      statusCode: typeof err.code === "number" ? err.code : undefined,
+      attempts: [
+        {
+          model: `codex/${model}`,
+          provider: "codex-cli",
+          ok: false,
+          statusCode: typeof err.code === "number" ? err.code : undefined,
+          error: summarizeCodexError(err)
+        }
+      ]
+    });
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function runCodexProcess(
+  command: string,
+  args: string[],
+  options: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number; input: string }
+): Promise<{ stdout: string; stderr: string }> {
+  return await new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      env: options.env,
+      windowsHide: true,
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill();
+    }, options.timeoutMs);
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) {
+        resolve({ stdout, stderr });
+      } else {
+        reject({
+          code,
+          stdout,
+          stderr,
+          message: timedOut ? "Codex CLI timed out" : `Codex CLI exited with code ${code}`
+        });
+      }
+    });
+    child.stdin.end(options.input);
+  });
+}
+
+function getCodexModel(): string {
+  const configured = process.env.ABOT_CODEX_MODEL?.trim() || process.env.ABOT_EXECUTION_MODEL?.trim();
+  if (!configured) return "gpt-5.5";
+  const slashIndex = configured.indexOf("/");
+  return slashIndex === -1 ? configured : configured.slice(slashIndex + 1);
+}
+
+function buildCodexPrompt(request: AgentExecutionRequest): string {
+  return [
+    `AboT selected agent: ${request.agent}.`,
+    "Execute this task in the local workspace. Inspect and edit files when the task requires it.",
+    "Keep the final response concise and include what changed plus any checks run.",
+    "",
+    ...request.messages.map((message) => `${message.role.toUpperCase()}:\n${message.content}`)
+  ].join("\n");
+}
+
+function summarizeCodexError(error: { stderr?: string; stdout?: string; message?: string }): string {
+  const text = [error.stderr, error.stdout, error.message].filter(Boolean).join("\n").trim();
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  return lines.slice(-8).join("\n") || "Codex CLI execution failed";
+}
+
+function getExecutionCandidates(request: AgentExecutionRequest): AgentModelCandidate[] {
+  const overrideModel = process.env.ABOT_EXECUTION_MODEL?.trim();
+  if (overrideModel) {
+    return [
+      {
+        model: overrideModel,
+        variant: process.env.ABOT_EXECUTION_VARIANT?.trim() || undefined,
+        source: "primary",
+        index: 0
+      }
+    ];
+  }
+
+  return getAgentModelCandidates(request.agent, request.configPath);
 }
 
 export async function executeTask(request: ExecutionRequest): Promise<ExecutionResult> {
@@ -219,7 +391,7 @@ function toAttempt(candidate: AgentModelCandidate, error: unknown): AgentModelAt
 }
 
 function shouldTryFallback(statusCode: number | undefined): boolean {
-  return statusCode === undefined || [400, 429, 503, 529].includes(statusCode);
+  return statusCode === undefined || [400, 401, 403, 404, 408, 409, 429, 500, 502, 503, 529].includes(statusCode);
 }
 
 function getRecord(value: unknown): Record<string, unknown> {

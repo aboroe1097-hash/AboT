@@ -15,3 +15,7 @@ data/
 .DS_Store
 .idea/
 .vscode/
+/.omo
+*.example
+*.example
+.env.example

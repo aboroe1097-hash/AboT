@@ -72,11 +72,41 @@ export function getApiToolStatuses(config = readApiTools()): ApiToolStatus[] {
 
 function getExecutionMissingEnv(): string[] {
   const missing: string[] = [];
-  if (!existsSync(getOpenAgentConfigPath())) missing.push("ABOT_OPENAGENT_CONFIG");
+  if (process.env.ABOT_EXECUTION_ADAPTER === "codex-cli") return missing;
+
+  const modelOverride = process.env.ABOT_EXECUTION_MODEL?.trim();
+
+  if (!modelOverride && !existsSync(getOpenAgentConfigPath())) missing.push("ABOT_OPENAGENT_CONFIG");
+
+  const requiredKey = getRequiredExecutionEnv(modelOverride);
+  if (requiredKey) {
+    if (!process.env[requiredKey]) missing.push(requiredKey);
+    return missing;
+  }
+
   if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY && !process.env.OPENROUTER_API_KEY && !process.env.OPENCODE_GO_BASE_URL) {
     missing.push("OPENAI_API_KEY or GEMINI_API_KEY or OPENROUTER_API_KEY or OPENCODE_GO_BASE_URL");
   }
   return missing;
+}
+
+function getRequiredExecutionEnv(modelOverride: string | undefined): string | undefined {
+  if (!modelOverride) return undefined;
+  const provider = modelOverride.includes("/") ? modelOverride.split("/")[0] : "openai";
+
+  switch (provider) {
+    case "google":
+    case "gemini":
+      return "GEMINI_API_KEY";
+    case "openai":
+      return "OPENAI_API_KEY";
+    case "openrouter":
+      return "OPENROUTER_API_KEY";
+    case "opencode-go":
+      return process.env.OPENCODE_GO_BASE_URL ? undefined : "OPENCODE_GO_BASE_URL";
+    default:
+      return undefined;
+  }
 }
 
 function getRouterMissingEnv(): string[] {

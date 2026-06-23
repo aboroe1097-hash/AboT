@@ -1,8 +1,8 @@
 const state = {
   projects: [],
   activeProjectId: undefined,
-  toolsConfig: undefined,
-  routes: []
+  routes: [],
+  setup: undefined
 };
 
 const AGENTS = [
@@ -29,97 +29,98 @@ const AGENTS = [
 
 const els = {
   healthLine: document.querySelector("#health-line"),
-  projectList: document.querySelector("#project-list"),
+  apiPill: document.querySelector("#api-pill"),
+  refreshAll: document.querySelector("#refresh-all"),
+  themeToggle: document.querySelector("#theme-toggle"),
   activeProject: document.querySelector("#active-project"),
+  projectList: document.querySelector("#project-list"),
   projectForm: document.querySelector("#project-form"),
   projectName: document.querySelector("#project-name"),
   projectRoot: document.querySelector("#project-root"),
-  themeToggle: document.querySelector("#theme-toggle"),
-  addContext: document.querySelector(".plus-button"),
+  refreshProjects: document.querySelector("#refresh-projects"),
+  chatFeed: document.querySelector("#chat-feed"),
   chatForm: document.querySelector("#chat-form"),
-  chatButton: document.querySelector("#chat-button"),
   task: document.querySelector("#task"),
-  openFiles: document.querySelector("#open-files"),
-  changedFiles: document.querySelector("#changed-files"),
-  diffLines: document.querySelector("#diff-lines"),
-  executeTask: document.querySelector("#execute-task"),
   runMode: document.querySelector("#run-mode"),
   fixedAgent: document.querySelector("#fixed-agent"),
+  executeTask: document.querySelector("#execute-task"),
+  diffLines: document.querySelector("#diff-lines"),
+  openFiles: document.querySelector("#open-files"),
+  changedFiles: document.querySelector("#changed-files"),
   routeButton: document.querySelector("#route-button"),
-  chatFeed: document.querySelector("#chat-feed"),
-  routesList: document.querySelector("#routes-list"),
-  routeFilter: document.querySelector("#route-filter"),
-  toolsStatus: document.querySelector("#tools-status"),
-  toolsEditor: document.querySelector("#tools-editor"),
-  saveToolsButton: document.querySelector("#save-tools"),
-  refreshTree: document.querySelector("#refresh-tree"),
-  treePath: document.querySelector("#tree-path"),
-  openTreePath: document.querySelector("#open-tree-path"),
-  fileTree: document.querySelector("#file-tree"),
-  filePath: document.querySelector("#file-path"),
-  fileEditor: document.querySelector("#file-editor"),
-  saveFile: document.querySelector("#save-file"),
+  chatButton: document.querySelector("#chat-button"),
+  setupStatus: document.querySelector("#setup-status"),
+  apiSetupForm: document.querySelector("#api-setup-form"),
+  routerProvider: document.querySelector("#router-provider"),
+  routerModel: document.querySelector("#router-model"),
+  routerBaseUrlRow: document.querySelector("#router-base-url-row"),
+  routerBaseUrl: document.querySelector("#router-base-url"),
+  routerApiKey: document.querySelector("#router-api-key"),
+  executionProvider: document.querySelector("#execution-provider"),
+  executionModel: document.querySelector("#execution-model"),
+  executionApiKeyRow: document.querySelector("#execution-api-key-row"),
+  executionApiKey: document.querySelector("#execution-api-key"),
+  opencodeGoRow: document.querySelector("#opencode-go-row"),
+  opencodeGoBaseUrl: document.querySelector("#opencode-go-base-url"),
+  openAgentConfig: document.querySelector("#openagent-config"),
+  confirmApi: document.querySelector("#confirm-api"),
+  saveApi: document.querySelector("#save-api"),
   commandInput: document.querySelector("#command-input"),
   runCommand: document.querySelector("#run-command"),
   copyCommandOutput: document.querySelector("#copy-command-output"),
   commandOutput: document.querySelector("#command-output"),
+  routeFilter: document.querySelector("#route-filter"),
+  routesList: document.querySelector("#routes-list"),
+  refreshRoutes: document.querySelector("#refresh-routes"),
+  exportJson: document.querySelector("#export-json"),
+  exportCsv: document.querySelector("#export-csv"),
   toastRegion: document.querySelector("#toast-region")
 };
 
-const initialTheme = localStorage.getItem("abot-theme") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-setTheme(initialTheme);
+setTheme(localStorage.getItem("abot-theme") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+renderAgentOptions();
+renderEmptyFeed();
+bindEvents();
+await refreshAll().catch((error) => showToast(getErrorMessage(error), "error"));
 
-document.querySelectorAll(".tab").forEach((button) => {
-  button.addEventListener("click", () => setView(button.dataset.view));
-});
-document.querySelectorAll(".rail-tab").forEach((button) => {
-  button.addEventListener("click", () => setPanel(button.dataset.panel));
-});
+function bindEvents() {
+  els.themeToggle.addEventListener("click", toggleTheme);
+  bindAsync(els.refreshAll, "click", refreshAll);
+  bindAsync(els.refreshProjects, "click", loadProjects);
+  bindAsync(els.projectForm, "submit", addProject);
+  bindAsync(els.routeButton, "click", routeTask);
+  bindAsync(els.chatForm, "submit", sendChat);
+  bindAsync(els.apiSetupForm, "submit", saveApiSetup);
+  bindAsync(els.confirmApi, "click", confirmApiSetup);
+  bindAsync(els.runCommand, "click", runCommand);
+  bindAsync(els.copyCommandOutput, "click", copyCommandOutput);
+  bindAsync(els.refreshRoutes, "click", loadRoutes);
+  els.exportJson.addEventListener("click", () => exportRoutes("json"));
+  els.exportCsv.addEventListener("click", () => exportRoutes("csv"));
+  els.routeFilter.addEventListener("input", () => renderRoutes(state.routes));
+  els.routerProvider.addEventListener("change", syncSetupFields);
+  els.executionProvider.addEventListener("change", syncSetupFields);
 
-els.themeToggle.addEventListener("click", toggleTheme);
-bindAsync(document.querySelector("#refresh-projects"), "click", loadProjects);
-bindAsync(document.querySelector("#refresh-routes"), "click", loadRoutes);
-document.querySelector("#export-json").addEventListener("click", () => exportRoutes("json"));
-document.querySelector("#export-csv").addEventListener("click", () => exportRoutes("csv"));
-els.routeFilter.addEventListener("input", () => renderRoutes(state.routes));
-bindAsync(els.saveToolsButton, "click", saveTools);
-bindAsync(els.refreshTree, "click", () => loadTree(els.treePath.value || "."));
-bindAsync(els.openTreePath, "click", () => loadTree(els.treePath.value || "."));
-bindAsync(els.saveFile, "click", saveFile);
-bindAsync(els.runCommand, "click", runCommand);
-bindAsync(els.copyCommandOutput, "click", copyCommandOutput);
-els.addContext.addEventListener("click", addCurrentFileToContext);
-bindAsync(els.routeButton, "click", routeTask);
-bindAsync(els.chatForm, "submit", sendChat);
-bindAsync(els.projectForm, "submit", addProject);
+  window.addEventListener("unhandledrejection", (event) => {
+    showToast(getErrorMessage(event.reason), "error");
+  });
+  window.addEventListener("error", (event) => {
+    showToast(event.message, "error");
+  });
+}
 
-window.addEventListener("unhandledrejection", (event) => {
-  showToast(getErrorMessage(event.reason), "error");
-});
-window.addEventListener("error", (event) => {
-  showToast(event.message, "error");
-});
-
-await init().catch((error) => {
-  renderEmptyChat();
-  showToast(getErrorMessage(error), "error");
-});
-
-async function init() {
-  renderEmptyChat();
-  renderAgentOptions();
+async function refreshAll() {
   await loadHealth();
   await loadProjects();
-  await loadTools();
+  await loadSetup();
   await loadRoutes();
-  await loadTree(".");
 }
 
 async function loadHealth() {
   const health = await api("/api/health");
   els.healthLine.textContent = health.routerLlmConfigured
-    ? `Router LLM configured: ${health.routerProvider || "provider"} / ${health.routerModel || "model"}`
-    : "Router LLM not configured";
+    ? `${health.routerProvider || "router"} / ${health.routerModel || "model"}`
+    : "Router missing";
 }
 
 async function loadProjects() {
@@ -132,30 +133,81 @@ async function loadProjects() {
 
 async function addProject(event) {
   event.preventDefault();
-  const button = els.projectForm.querySelector("button[type='submit']");
-  await withButtonBusy(button, "Adding", async () => {
-    const project = await api("/api/projects", {
+  if (!els.projectRoot.value.trim()) return;
+
+  await withButtonBusy(els.projectForm.querySelector("button[type='submit']"), "Saving", async () => {
+    const result = await api("/api/projects", {
       method: "POST",
       body: {
-        name: els.projectName.value.trim(),
+        name: els.projectName.value.trim() || undefined,
         rootPath: els.projectRoot.value.trim()
       }
     });
-    state.activeProjectId = project.project.id;
+    state.activeProjectId = result.project.id;
     els.projectName.value = "";
     els.projectRoot.value = "";
     await loadProjects();
-    showToast("Project added", "success");
+    showToast("Folder ready", "success");
+  });
+}
+
+async function loadSetup() {
+  const setup = await api("/api/setup");
+  state.setup = setup;
+  renderSetup(setup);
+}
+
+async function saveApiSetup(event) {
+  event.preventDefault();
+  await withButtonBusy(els.saveApi, "Saving", async () => {
+    const result = await api("/api/setup", {
+      method: "POST",
+      body: {
+        routerProvider: els.routerProvider.value,
+        routerModel: els.routerModel.value.trim(),
+        routerBaseUrl: els.routerBaseUrl.value.trim(),
+        routerApiKey: els.routerApiKey.value.trim(),
+        executionProvider: els.executionProvider.value,
+        executionModel: els.executionModel.value.trim(),
+        executionApiKey: els.executionApiKey.value.trim(),
+        opencodeGoBaseUrl: els.opencodeGoBaseUrl.value.trim(),
+        openAgentConfig: els.openAgentConfig.value.trim()
+      }
+    });
+    els.routerApiKey.value = "";
+    els.executionApiKey.value = "";
+    renderSetup(result.setup);
+    await loadHealth();
+    showToast("Saved to .env.local", "success");
+  });
+}
+
+async function confirmApiSetup() {
+  await withButtonBusy(els.confirmApi, "Checking", async () => {
+    const result = await api("/api/setup/confirm", { method: "POST" });
+    renderSetup(result.setup);
+    await loadHealth();
+    const routerOk = Boolean(result.setup?.router?.configured);
+    const executionOk = Boolean(result.setup?.execution?.configured);
+    const probeOk = result.setup?.executionProbe?.skipped ? executionOk : Boolean(result.setup?.executionProbe?.ok);
+    showToast(routerOk && executionOk && probeOk ? "API ready" : "API needs attention", routerOk && executionOk && probeOk ? "success" : "error");
   });
 }
 
 async function routeTask() {
+  if (!els.task.value.trim()) return;
   await withButtonBusy(els.routeButton, "Routing", async () => {
     const result = await api("/api/route", {
       method: "POST",
       body: buildTaskPayload()
     });
-    renderRoutePreview(result);
+    renderMessages([
+      {
+        role: "assistant",
+        createdAt: new Date().toISOString(),
+        content: routeSummary(result)
+      }
+    ]);
     await loadRoutes();
   });
 }
@@ -169,128 +221,15 @@ async function sendChat(event) {
       method: "POST",
       body: buildTaskPayload()
     });
-
     renderMessages(result.messages);
     els.task.value = "";
     await loadRoutes();
   });
 }
 
-async function loadRoutes() {
-  if (!state.activeProjectId) return;
-  const result = await api(`/api/routes?projectId=${encodeURIComponent(state.activeProjectId)}&limit=50`);
-  state.routes = result.routes;
-  renderRoutes(state.routes);
-}
-
-function exportRoutes(format) {
-  if (!state.activeProjectId) return;
-  const url = `/api/export/routes?projectId=${encodeURIComponent(state.activeProjectId)}&limit=1000&format=${format}`;
-  window.open(url, "_blank", "noopener,noreferrer");
-}
-
-async function loadTools() {
-  const result = await api("/api/tools");
-  state.toolsConfig = result.config;
-  els.toolsEditor.value = JSON.stringify(result.config, null, 2);
-  renderTools(result.tools);
-}
-
-async function saveTools() {
-  await withButtonBusy(els.saveToolsButton, "Saving", async () => {
-    const parsed = JSON.parse(els.toolsEditor.value);
-    const result = await api("/api/tools", {
-      method: "PUT",
-      body: parsed
-    });
-    state.toolsConfig = result.config;
-    els.toolsEditor.value = JSON.stringify(result.config, null, 2);
-    renderTools(result.tools);
-    showToast("Tools saved", "success");
-  });
-}
-
-function renderProjects() {
-  els.projectList.innerHTML = "";
-  for (const project of state.projects) {
-    const button = document.createElement("button");
-    button.className = `project-item${project.id === state.activeProjectId ? " active" : ""}`;
-    button.type = "button";
-    button.innerHTML = `
-      <span class="project-name">${escapeHtml(project.name)}</span>
-      <span class="project-root">${escapeHtml(project.rootPath)}</span>
-    `;
-    button.addEventListener("click", async () => {
-      state.activeProjectId = project.id;
-      renderProjects();
-      await loadRoutes();
-      await loadTree(".");
-    });
-    els.projectList.append(button);
-  }
-
-  const active = state.projects.find((project) => project.id === state.activeProjectId);
-  els.activeProject.textContent = active?.name ?? "AboT";
-}
-
-async function loadTree(path = ".") {
-  if (!state.activeProjectId) return;
-  const result = await api(`/api/workspace/tree?projectId=${encodeURIComponent(state.activeProjectId)}&path=${encodeURIComponent(path)}`);
-  els.treePath.value = result.path;
-  renderTree(result.entries);
-}
-
-function renderTree(entries) {
-  els.fileTree.innerHTML = "";
-  if (!entries.length) {
-    els.fileTree.innerHTML = `<div class="route-meta">Empty folder</div>`;
-    return;
-  }
-
-  for (const entry of entries) {
-    const button = document.createElement("button");
-    button.className = "file-entry";
-    button.type = "button";
-    button.innerHTML = `<span>${entry.type === "directory" ? "[D]" : "[F]"}</span><span>${escapeHtml(entry.name)}</span>`;
-    button.addEventListener("click", async () => {
-      if (entry.type === "directory") {
-        await loadTree(entry.path);
-      } else {
-        await loadFile(entry.path);
-      }
-    });
-    els.fileTree.append(button);
-  }
-}
-
-async function loadFile(path) {
-  if (!state.activeProjectId) return;
-  const result = await api(`/api/workspace/file?projectId=${encodeURIComponent(state.activeProjectId)}&path=${encodeURIComponent(path)}`);
-  els.filePath.value = result.path;
-  els.fileEditor.value = result.content;
-}
-
-async function saveFile() {
-  if (!state.activeProjectId || !els.filePath.value.trim()) return;
-  await withButtonBusy(els.saveFile, "Saving", async () => {
-    const result = await api("/api/workspace/file", {
-      method: "PUT",
-      body: {
-        projectId: state.activeProjectId,
-        path: els.filePath.value.trim(),
-        content: els.fileEditor.value
-      }
-    });
-    els.commandOutput.textContent = `Saved ${result.path} (${result.bytes} bytes)`;
-    await loadTree(els.treePath.value || ".");
-    showToast(`Saved ${result.path}`, "success");
-  });
-}
-
 async function runCommand() {
   if (!state.activeProjectId || !els.commandInput.value.trim()) return;
   els.commandOutput.textContent = "Running...";
-  els.copyCommandOutput.textContent = "Copy";
   await withButtonBusy(els.runCommand, "Running", async () => {
     const result = await api("/api/workspace/command", {
       method: "POST",
@@ -314,82 +253,164 @@ async function runCommand() {
 async function copyCommandOutput() {
   const text = els.commandOutput.textContent.trim();
   if (!text) return;
-
   await copyText(text);
   flashButtonLabel(els.copyCommandOutput, "Copied");
 }
 
-function addCurrentFileToContext() {
-  setPanel("settings");
-  const currentFile = els.filePath.value.trim();
-  if (currentFile) {
-    const existing = new Set(lines(els.openFiles.value));
-    if (!existing.has(currentFile)) {
-      els.openFiles.value = [...existing, currentFile].join("\n");
-    }
-  }
-  els.openFiles.focus();
+async function loadRoutes() {
+  if (!state.activeProjectId) return;
+  const result = await api(`/api/routes?projectId=${encodeURIComponent(state.activeProjectId)}&limit=80`);
+  state.routes = result.routes;
+  renderRoutes(state.routes);
 }
 
-function renderRoutePreview(result) {
-  renderMessages([
-    {
-      role: "assistant",
-      createdAt: new Date().toISOString(),
-      content: routeSummary(result)
-    }
-  ]);
+function exportRoutes(format) {
+  if (!state.activeProjectId) return;
+  window.open(`/api/export/routes?projectId=${encodeURIComponent(state.activeProjectId)}&limit=1000&format=${format}`, "_blank", "noopener,noreferrer");
+}
+
+function renderProjects() {
+  const active = state.projects.find((project) => project.id === state.activeProjectId) ?? state.projects[0];
+  if (active) {
+    state.activeProjectId = active.id;
+    els.activeProject.textContent = active.rootPath;
+  } else {
+    els.activeProject.textContent = "No folder";
+  }
+
+  els.projectList.innerHTML = "";
+  for (const project of state.projects.slice(0, 4)) {
+    const button = document.createElement("button");
+    button.className = `project-item${project.id === state.activeProjectId ? " active" : ""}`;
+    button.type = "button";
+    button.textContent = project.name || project.rootPath;
+    button.title = project.rootPath;
+    button.addEventListener("click", async () => {
+      state.activeProjectId = project.id;
+      renderProjects();
+      await loadRoutes();
+    });
+    els.projectList.append(button);
+  }
+}
+
+function renderSetup(setup) {
+  state.setup = setup;
+  const router = setup.router || {};
+  const execution = setup.execution || {};
+  const routerConfigured = Boolean(router.configured);
+  const executionConfigured = Boolean(execution.configured);
+
+  const probeFailed = setup.executionProbe && !setup.executionProbe.ok && !setup.executionProbe.skipped;
+  els.apiPill.textContent = !routerConfigured ? "API missing" : probeFailed ? "API blocked" : "API ready";
+  els.apiPill.className = `status-pill ${routerConfigured && !probeFailed ? "ok" : "warn"}`;
+  els.routerProvider.value = router.provider === "gemini" ? "gemini" : "openai-compatible";
+  els.routerModel.value = router.model || els.routerModel.value || "gemini-3.1-flash-lite";
+  els.routerBaseUrl.value = router.provider === "gemini" ? "" : router.baseUrl || els.routerBaseUrl.value;
+  els.openAgentConfig.value = execution.openAgentConfigPath || els.openAgentConfig.value;
+  els.executionProvider.value = execution.adapter === "codex-cli"
+    ? "codex-cli"
+    : executionProviderFromModel(execution.modelOverride) || els.executionProvider.value || "gemini";
+  els.executionModel.value = execution.codexModel || stripProviderPrefix(execution.modelOverride || els.executionModel.value || router.model || "gpt-5.5");
+  syncSetupFields();
+
+  els.setupStatus.innerHTML = [
+    statusLine("Router", routerConfigured, router.model || router.provider || "missing"),
+    statusLine("Single Model", Boolean(execution.modelOverride), execution.modelOverride || "OpenAgent chain"),
+    statusLine("Execution", executionConfigured, execution.openAgentConfigExists ? "config found" : "config missing"),
+    setup.executionProbe ? statusLine("Live Test", Boolean(setup.executionProbe.ok), formatProbe(setup.executionProbe)) : "",
+    statusLine(".env.local", Boolean(setup.envFileIgnored), setup.envFileIgnored ? "ignored" : "check gitignore")
+  ].filter(Boolean).join("");
+}
+
+function statusLine(label, ok, detail) {
+  return `
+    <div class="status-line">
+      <span>${escapeHtml(label)}</span>
+      <span class="status-pill ${ok ? "ok" : "warn"}">${escapeHtml(detail)}</span>
+    </div>
+  `;
+}
+
+function syncSetupFields() {
+  const geminiRouter = els.routerProvider.value === "gemini";
+  els.routerBaseUrlRow.hidden = geminiRouter;
+  if (geminiRouter && !els.routerModel.value.trim()) {
+    els.routerModel.value = "gemini-3.1-flash-lite";
+  }
+  if (els.executionProvider.value === "gemini" && !els.executionModel.value.trim()) {
+    els.executionModel.value = "gemini-3.1-flash-lite";
+  }
+  if (els.executionProvider.value === "codex-cli" && !els.executionModel.value.trim()) {
+    els.executionModel.value = "gpt-5.5";
+  }
+  els.executionApiKeyRow.hidden = els.executionProvider.value === "codex-cli";
+  els.opencodeGoRow.hidden = els.executionProvider.value !== "opencode-go";
+}
+
+function stripProviderPrefix(model) {
+  const value = String(model || "");
+  const slashIndex = value.indexOf("/");
+  return slashIndex === -1 ? value : value.slice(slashIndex + 1);
+}
+
+function executionProviderFromModel(model) {
+  const provider = String(model || "").split("/")[0];
+  switch (provider) {
+    case "google":
+    case "gemini":
+      return "gemini";
+    case "openai":
+    case "openrouter":
+    case "opencode-go":
+      return provider;
+    case "codex":
+      return "codex-cli";
+    default:
+      return "";
+  }
+}
+
+function formatProbe(probe) {
+  if (probe.ok) return `${probe.provider || "provider"} ${Number(probe.latencyMs || 0).toFixed(0)}ms`;
+  return probe.statusCode ? `failed ${probe.statusCode}` : probe.message || "not tested";
 }
 
 function renderMessages(messages) {
-  clearEmptyChat();
+  clearEmptyFeed();
   for (const message of messages) {
     const item = document.createElement("article");
     item.className = `message ${message.role}`;
     item.innerHTML = `
       <div class="message-head">
-        <div class="message-meta">${escapeHtml(message.role)} - ${formatDate(message.createdAt)}</div>
-        <button class="message-copy" type="button" title="Copy message">Copy</button>
+        <span>${escapeHtml(message.role)} · ${formatDate(message.createdAt)}</span>
+        <button class="copy-button" type="button">Copy</button>
       </div>
       <div class="message-body">${escapeHtml(message.content)}</div>
     `;
-    const copyButton = item.querySelector(".message-copy");
+    const copyButton = item.querySelector(".copy-button");
     copyButton.addEventListener("click", async () => {
       await copyText(message.content);
       flashButtonLabel(copyButton, "Copied");
     });
-    els.chatFeed.prepend(item);
+    els.chatFeed.append(item);
   }
+  els.chatFeed.scrollTop = els.chatFeed.scrollHeight;
 }
 
-function renderEmptyChat() {
+function renderEmptyFeed() {
   if (els.chatFeed.children.length > 0) return;
   const item = document.createElement("article");
-  item.className = "empty-state";
-  item.innerHTML = `
-    <div class="empty-title">Ready to route your next task.</div>
-    <div class="empty-copy">Try a focused request, compare orchestrated vs fixed-agent mode, or open the Workspace tab to inspect files and run commands.</div>
-    <div class="empty-actions">
-      <button type="button" data-prompt="fix the auth regression in the failing tests">Debug task</button>
-      <button type="button" data-prompt="polish the CSS for the dashboard mobile layout">CSS task</button>
-      <button type="button" data-prompt="do the thing we discussed">Ambiguous task</button>
-    </div>
-  `;
-  item.querySelectorAll("[data-prompt]").forEach((button) => {
-    button.addEventListener("click", () => {
-      els.task.value = button.dataset.prompt;
-      els.task.focus();
-    });
-  });
+  item.className = "empty-feed";
+  item.textContent = "Ready";
   els.chatFeed.append(item);
 }
 
-function clearEmptyChat() {
-  els.chatFeed.querySelector(".empty-state")?.remove();
+function clearEmptyFeed() {
+  els.chatFeed.querySelector(".empty-feed")?.remove();
 }
 
 function renderRoutes(routes) {
-  els.routesList.innerHTML = "";
   const query = els.routeFilter.value.trim().toLowerCase();
   const filtered = query
     ? routes.filter((route) => {
@@ -401,8 +422,9 @@ function renderRoutes(routes) {
       })
     : routes;
 
+  els.routesList.innerHTML = "";
   if (filtered.length === 0) {
-    els.routesList.innerHTML = `<div class="route-row"><div class="route-meta">${query ? "No matching routes" : "No routes yet"}</div></div>`;
+    els.routesList.innerHTML = `<div class="empty-row">No logs</div>`;
     return;
   }
 
@@ -413,26 +435,14 @@ function renderRoutes(routes) {
     const row = document.createElement("article");
     row.className = "route-row";
     row.innerHTML = `
-      <div class="route-top">
-        <div>
-          <div class="route-task">${escapeHtml(route.task)}</div>
-          <div class="route-meta">${formatDate(route.createdAt)}</div>
-        </div>
-        <span class="badge agent">${escapeHtml(decision.agent || "unknown")}</span>
-      </div>
+      <div class="route-task">${escapeHtml(route.task)}</div>
+      <div class="route-meta">${escapeHtml(decision.agent || "unknown")} · ${escapeHtml(verdict.intent || "intent")} · ${Number(route.timings?.totalRequestMs || 0).toFixed(1)}ms</div>
       <div class="badge-row">
-        <span class="badge">${escapeHtml(verdict.intent || "unknown")}</span>
-        <span class="badge">${escapeHtml(verdict.complexity || "unknown")}</span>
-        <span class="badge">${escapeHtml(decision.phase || "unknown")}</span>
         <span class="badge">${escapeHtml(route.mode || "orchestrated")}</span>
-        ${route.fixedAgent ? `<span class="badge">fixed ${escapeHtml(route.fixedAgent)}</span>` : ""}
-        <span class="badge">cost ${Number(decision.costUnits || 0)}</span>
+        <span class="badge">${escapeHtml(verdict.complexity || "complexity")}</span>
         <span class="badge">in ${Number(route.estimatedInputTokens || 0)}</span>
         <span class="badge">out ${Number(route.estimatedOutputTokens || 0)}</span>
-        <span class="badge">time ${Number(route.timings?.totalRequestMs || 0).toFixed(1)}ms</span>
-        <span class="badge ${route.contextBudgetWarning ? "danger" : ""}">ctx ${Number(route.contextEstimateTokens || 0)}</span>
-        ${renderExecutionBadges(metrics)}
-        ${renderWarnings(decision.warnings || [])}
+        ${metrics.executionStatus ? `<span class="badge ${metrics.executionStatus === "success" ? "ok" : "warn"}">${escapeHtml(metrics.executionStatus)}</span>` : ""}
       </div>
     `;
     els.routesList.append(row);
@@ -448,69 +458,6 @@ function renderAgentOptions() {
     if (agent === "atlas") option.selected = true;
     els.fixedAgent.append(option);
   }
-}
-
-function renderWarnings(warnings) {
-  return warnings.map((warning) => `<span class="badge warn">${escapeHtml(warning)}</span>`).join("");
-}
-
-function renderExecutionBadges(metrics) {
-  if (!metrics.executionStatus) return "";
-  const statusClass = metrics.executionStatus === "success" ? "agent" : "danger";
-  return [
-    `<span class="badge ${statusClass}">exec ${escapeHtml(metrics.executionStatus)}</span>`,
-    metrics.executionModel ? `<span class="badge">${escapeHtml(metrics.executionModel)}</span>` : "",
-    metrics.executionProvider ? `<span class="badge">${escapeHtml(metrics.executionProvider)}</span>` : "",
-    metrics.executionLatencyMs ? `<span class="badge">exec ${Number(metrics.executionLatencyMs).toFixed(1)}ms</span>` : "",
-    metrics.actualInputTokens ? `<span class="badge">actual in ${Number(metrics.actualInputTokens)}</span>` : "",
-    metrics.actualOutputTokens ? `<span class="badge">actual out ${Number(metrics.actualOutputTokens)}</span>` : ""
-  ].join("");
-}
-
-function renderTools(tools) {
-  els.toolsStatus.innerHTML = "";
-  for (const tool of tools) {
-    const row = document.createElement("article");
-    row.className = "tool-row";
-    row.innerHTML = `
-      <div class="route-top">
-        <div>
-          <div class="route-task">${escapeHtml(tool.label)}</div>
-          <div class="route-meta">${escapeHtml(tool.kind)}</div>
-        </div>
-        <span class="badge ${tool.configured ? "agent" : "warn"}">${tool.configured ? "configured" : "missing env"}</span>
-      </div>
-      <div class="badge-row">
-        <span class="badge">${tool.enabled ? "enabled" : "disabled"}</span>
-        ${tool.missingEnv.map((name) => `<span class="badge warn">${escapeHtml(name)}</span>`).join("")}
-      </div>
-    `;
-    els.toolsStatus.append(row);
-  }
-}
-
-function setView(view) {
-  document.querySelectorAll(".tab").forEach((button) => {
-    button.classList.toggle("active", button.dataset.view === view);
-  });
-  document.querySelectorAll(".view").forEach((section) => {
-    section.classList.toggle("active-view", section.id === `view-${view}`);
-  });
-}
-
-function setPanel(panel) {
-  document.querySelectorAll(".rail-tab").forEach((button) => {
-    const active = button.dataset.panel === panel;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-selected", String(active));
-    button.tabIndex = active ? 0 : -1;
-  });
-  document.querySelectorAll(".rail-panel").forEach((section) => {
-    const active = section.id === `panel-${panel}`;
-    section.classList.toggle("active-panel", active);
-    section.hidden = !active;
-  });
-  document.querySelector(`#panel-${panel}`)?.focus({ preventScroll: true });
 }
 
 function buildTaskPayload() {
@@ -529,7 +476,7 @@ function buildTaskPayload() {
 function routeSummary(result) {
   const { verdict, decision, contextEstimateTokens, contextBudgetWarning } = result.planned;
   const route = result.route;
-  const warningText = decision.warnings.length ? `\nWarnings: ${decision.warnings.join(", ")}` : "";
+  const warnings = decision.warnings.length ? `\nWarnings: ${decision.warnings.join(", ")}` : "";
   return [
     `Agent: ${decision.agent}`,
     `Mode: ${route.mode}${route.fixedAgent ? ` (${route.fixedAgent})` : ""}`,
@@ -540,7 +487,7 @@ function routeSummary(result) {
     `Estimated input/output tokens: ${route.estimatedInputTokens}/${route.estimatedOutputTokens}`,
     `Total time: ${Number(route.timings?.totalRequestMs || 0).toFixed(3)}ms`,
     `Context estimate: ${contextEstimateTokens}${contextBudgetWarning ? " over budget" : ""}`,
-    `Reason: ${decision.reason}${warningText}`
+    `Reason: ${decision.reason}${warnings}`
   ].join("\n");
 }
 
@@ -576,9 +523,49 @@ async function withButtonBusy(button, label, callback) {
   }
 }
 
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    method: options.method || "GET",
+    headers: options.body ? { "content-type": "application/json" } : undefined,
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+  const json = await response.json();
+  if (!response.ok) throw new Error(json.error || "Request failed");
+  return json;
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall through to the legacy path for local browser contexts that block clipboard writes.
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.append(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) throw new Error("Copy failed");
+}
+
+function flashButtonLabel(button, label) {
+  const original = button.textContent;
+  button.textContent = label;
+  window.setTimeout(() => {
+    button.textContent = original;
+  }, 1200);
+}
+
 function toggleTheme() {
-  const next = document.body.dataset.theme === "light" ? "dark" : "light";
-  setTheme(next);
+  setTheme(document.body.dataset.theme === "light" ? "dark" : "light");
 }
 
 function setTheme(theme) {
@@ -596,48 +583,11 @@ function showToast(message, tone = "info") {
   toast.className = `toast ${tone}`;
   toast.textContent = message;
   els.toastRegion.append(toast);
-  window.setTimeout(() => toast.remove(), 3800);
+  window.setTimeout(() => toast.remove(), 3500);
 }
 
 function getErrorMessage(error) {
   return error instanceof Error ? error.message : String(error || "Something went wrong");
-}
-
-async function api(path, options = {}) {
-  const response = await fetch(path, {
-    method: options.method || "GET",
-    headers: options.body ? { "content-type": "application/json" } : undefined,
-    body: options.body ? JSON.stringify(options.body) : undefined
-  });
-
-  const json = await response.json();
-  if (!response.ok) throw new Error(json.error || "Request failed");
-  return json;
-}
-
-async function copyText(text) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.append(textarea);
-  textarea.select();
-  document.execCommand("copy");
-  textarea.remove();
-}
-
-function flashButtonLabel(button, label) {
-  const original = button.textContent;
-  button.textContent = label;
-  window.setTimeout(() => {
-    button.textContent = original;
-  }, 1200);
 }
 
 function formatDate(value) {

@@ -4,11 +4,18 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { performance } from "node:perf_hooks";
 import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
-import { getEnvLlmRouterOptions, planFixedAgent, planTaskWithFallback, type PlannedTask } from "@abot/core";
+import {
+  GEMINI_OPENAI_COMPAT_BASE_URL,
+  getEnvLlmRouterOptions,
+  planFixedAgent,
+  planTaskWithFallback,
+  type PlannedTask
+} from "@abot/core";
 import { estimateTokenCount } from "@abot/context";
-import { executeAgentTask, ExecutionError } from "@abot/executor";
+import { executeAgentTask, executeTask, ExecutionError, getOpenAgentConfigPath } from "@abot/executor";
 import { SqliteAboTStore, type ProjectRecord, type RouteEventRecord } from "@abot/memory";
 import { AGENT_NAMES, getAgentCostUnits, type AgentName } from "@abot/router";
+import { writeLocalEnvValues } from "./env.js";
 import { getApiToolStatuses, readApiTools, writeApiTools, type ApiToolsFile } from "./tool-config.js";
 
 const execAsync = promisify(exec);
@@ -39,6 +46,18 @@ export interface RouteResponse {
   route: RouteEventRecord;
   planned: PlannedTask;
   budgetRemaining: number;
+}
+
+export interface ApiSetupRequest {
+  routerProvider?: "gemini" | "openai-compatible";
+  routerModel?: string;
+  routerBaseUrl?: string;
+  routerApiKey?: string;
+  openAgentConfig?: string;
+  executionProvider?: "codex-cli" | "gemini" | "openai" | "openrouter" | "opencode-go";
+  executionModel?: string;
+  executionApiKey?: string;
+  opencodeGoBaseUrl?: string;
 }
 
 export function createAboTServer(options: AboTServerOptions = {}): Server {
@@ -191,6 +210,34 @@ async function handleRequest(input: {
     sendJson(response, 200, {
       config: readApiTools(),
       tools: getApiToolStatuses()
+    });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/setup") {
+    sendJson(response, 200, getSetupStatus());
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/setup") {
+    const body = await readJson<ApiSetupRequest>(request);
+    const writtenKeys = writeLocalEnvValues(buildSetupEnvUpdates(body));
+    sendJson(response, 200, {
+      ok: true,
+      writtenKeys,
+      setup: getSetupStatus()
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/setup/confirm") {
+    const executionProbe = await probeExecutionModel();
+    sendJson(response, 200, {
+      ok: true,
+      setup: {
+        ...getSetupStatus(),
+        executionProbe
+      }
     });
     return;
   }
@@ -476,6 +523,7 @@ async function executeAndLog(
       messages: buildExecutionMessages(result),
       contextBudgetTokens: result.planned.decision.contextBudgetTokens,
       contextFiles: result.planned.context,
+      cwd: result.project.rootPath,
       timeoutMs
     });
     const executionMs = elapsed(executionStart);
@@ -520,16 +568,38 @@ async function executeAndLog(
 
     return {
       status: "failed",
-      content: [
-        "Execution failed after routing.",
-        `Selected agent: ${result.planned.decision.agent}`,
-        `Reason: ${message}`,
-        "The route was still logged, and you can retry with fixed-agent mode or another provider."
-      ].join("\n"),
+      content: buildExecutionFailureMessage(result, message, attempts),
       error: message,
       attemptedModels: attempts
     };
   }
+}
+
+function buildExecutionFailureMessage(result: RouteResponse, message: string, attempts: unknown[]): string {
+  const attemptLines = attempts
+    .map(formatExecutionAttempt)
+    .filter(Boolean);
+
+  return [
+    "Execution failed after routing.",
+    `Selected agent: ${result.planned.decision.agent}`,
+    `Reason: ${message}`,
+    attemptLines.length ? "Attempts:" : "",
+    ...attemptLines,
+    "The route was still logged. Update the failing provider key/base URL or retry with a fixed agent that uses a configured provider."
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function formatExecutionAttempt(attempt: unknown): string {
+  const record = attempt && typeof attempt === "object" ? (attempt as Record<string, unknown>) : {};
+  const model = typeof record.model === "string" ? record.model : "unknown model";
+  const variant = typeof record.variant === "string" ? `/${record.variant}` : "";
+  const provider = typeof record.provider === "string" ? record.provider : "unknown provider";
+  const status = typeof record.statusCode === "number" ? ` status ${record.statusCode}` : "";
+  const error = typeof record.error === "string" ? `: ${record.error}` : "";
+  return `- ${model}${variant} via ${provider}${status}${error}`;
 }
 
 function buildExecutionMessages(result: RouteResponse): Array<{ role: "system" | "user" | "assistant"; content: string }> {
@@ -539,8 +609,8 @@ function buildExecutionMessages(result: RouteResponse): Array<{ role: "system" |
       content: [
         `You are AboT executing as agent ${result.planned.decision.agent}.`,
         `Router intent: ${result.planned.verdict.intent}. Complexity: ${result.planned.verdict.complexity}.`,
-        "This execution call can answer and reason, but it cannot directly modify local files yet.",
-        "If code changes are needed, provide concise exact edits or commands to run."
+        "Execute inside the selected local workspace when the adapter supports it.",
+        "If direct edits are unavailable, provide concise exact edits or commands to run."
       ].join("\n")
     },
     {
@@ -732,6 +802,189 @@ function estimateOutputTokens(planned: PlannedTask): number {
     case "ultra":
       return 4000;
   }
+}
+
+function getSetupStatus(): Record<string, unknown> {
+  const router = getEnvLlmRouterOptions();
+  const tools = getApiToolStatuses();
+  const executionTool = tools.find((tool) => tool.id === "execution");
+  const openAgentConfigPath = getOpenAgentConfigPath();
+
+  return {
+    envFile: ".env.local",
+    envFileIgnored: isEnvFileIgnored(),
+    router: {
+      configured: Boolean(router.enabled),
+      provider: router.provider,
+      model: router.model ?? "",
+      baseUrl: router.baseUrl ?? "",
+      baseUrlConfigured: Boolean(router.baseUrl),
+      apiKeyConfigured: Boolean(router.apiKey)
+    },
+    execution: {
+      configured: Boolean(executionTool?.configured),
+      openAgentConfigPath,
+      openAgentConfigExists: existsSync(openAgentConfigPath),
+      providers: {
+        codexCli: process.env.ABOT_EXECUTION_ADAPTER === "codex-cli",
+        gemini: Boolean(process.env.GEMINI_API_KEY),
+        openai: Boolean(process.env.OPENAI_API_KEY),
+        openrouter: Boolean(process.env.OPENROUTER_API_KEY),
+        opencodeGo: Boolean(process.env.OPENCODE_GO_BASE_URL)
+      },
+      adapter: process.env.ABOT_EXECUTION_ADAPTER ?? "openai-compatible",
+      codexModel: process.env.ABOT_CODEX_MODEL ?? "",
+      modelOverride: process.env.ABOT_EXECUTION_MODEL ?? "",
+      missingEnv: executionTool?.missingEnv ?? []
+    },
+    tools
+  };
+}
+
+async function probeExecutionModel(): Promise<Record<string, unknown>> {
+  const model = process.env.ABOT_EXECUTION_MODEL?.trim();
+  if (process.env.ABOT_EXECUTION_ADAPTER === "codex-cli") {
+    try {
+      const result = await executeAgentTask({
+        agent: "unspecified-high",
+        messages: [{ role: "user", content: "Reply with exactly ok. Do not modify files." }],
+        contextBudgetTokens: 0,
+        contextFiles: [],
+        cwd: process.cwd(),
+        timeoutMs: 45000
+      });
+
+      return {
+        ok: true,
+        model: result.model,
+        provider: result.provider,
+        latencyMs: result.latencyMs,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens
+      };
+    } catch (error) {
+      const executionError = error instanceof ExecutionError ? error : undefined;
+      return {
+        ok: false,
+        model: model || "codex/gpt-5.5",
+        provider: executionError?.details.provider ?? "codex-cli",
+        statusCode: executionError?.details.statusCode,
+        message: error instanceof Error ? error.message : "Codex execution probe failed"
+      };
+    }
+  }
+
+  if (!model) {
+    return {
+      ok: false,
+      skipped: true,
+      message: "Set a single execution model to run a live confirm test."
+    };
+  }
+
+  try {
+    const result = await executeTask({
+      agent: "unspecified-high",
+      model,
+      messages: [{ role: "user", content: "Reply with exactly ok." }],
+      contextBudgetTokens: 0,
+      contextFiles: [],
+      timeoutMs: 15000
+    });
+
+    return {
+      ok: true,
+      model: result.model,
+      provider: result.provider,
+      latencyMs: result.latencyMs,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens
+    };
+  } catch (error) {
+    const executionError = error instanceof ExecutionError ? error : undefined;
+    return {
+      ok: false,
+      model,
+      provider: executionError?.details.provider,
+      statusCode: executionError?.details.statusCode,
+      message: error instanceof Error ? error.message : "Execution probe failed"
+    };
+  }
+}
+
+function buildSetupEnvUpdates(body: ApiSetupRequest): Record<string, string | undefined> {
+  const updates: Record<string, string | undefined> = {
+    ABOT_OPENAGENT_CONFIG: nonEmpty(body.openAgentConfig)
+  };
+  const routerProvider = body.routerProvider === "gemini" ? "gemini" : body.routerProvider === "openai-compatible" ? "openai-compatible" : undefined;
+  const routerModel = nonEmpty(body.routerModel);
+
+  if (routerProvider) {
+    updates.ABOT_ROUTER_PROVIDER = routerProvider;
+    if (routerModel) updates.ABOT_ROUTER_MODEL = routerModel;
+
+    if (routerProvider === "gemini") {
+      updates.ABOT_ROUTER_BASE_URL = GEMINI_OPENAI_COMPAT_BASE_URL;
+      updates.GEMINI_API_KEY = nonEmpty(body.routerApiKey);
+    } else {
+      updates.ABOT_ROUTER_BASE_URL = nonEmpty(body.routerBaseUrl);
+      updates.ABOT_ROUTER_API_KEY = nonEmpty(body.routerApiKey);
+    }
+  }
+
+  const executionApiKey = nonEmpty(body.executionApiKey);
+  updates.ABOT_EXECUTION_ADAPTER = body.executionProvider === "codex-cli" ? "codex-cli" : "openai-compatible";
+  updates.ABOT_CODEX_MODEL = body.executionProvider === "codex-cli" ? nonEmpty(body.executionModel) : undefined;
+  updates.ABOT_EXECUTION_MODEL = normalizeExecutionModel(body.executionProvider, body.executionModel);
+  switch (body.executionProvider) {
+    case "gemini":
+      updates.GEMINI_API_KEY = executionApiKey;
+      break;
+    case "openai":
+      updates.OPENAI_API_KEY = executionApiKey;
+      break;
+    case "openrouter":
+      updates.OPENROUTER_API_KEY = executionApiKey;
+      break;
+    case "opencode-go":
+      updates.OPENCODE_GO_API_KEY = executionApiKey;
+      break;
+  }
+
+  updates.OPENCODE_GO_BASE_URL = nonEmpty(body.opencodeGoBaseUrl);
+
+  return updates;
+}
+
+function normalizeExecutionModel(provider: ApiSetupRequest["executionProvider"], value: unknown): string | undefined {
+  const model = nonEmpty(value);
+  if (!model) return undefined;
+  if (model.includes("/")) return model;
+
+  switch (provider) {
+    case "gemini":
+      return `google/${model}`;
+    case "codex-cli":
+      return `codex/${model}`;
+    case "openai":
+      return `openai/${model}`;
+    case "openrouter":
+      return `openrouter/${model}`;
+    case "opencode-go":
+      return `opencode-go/${model}`;
+    default:
+      return model;
+  }
+}
+
+function nonEmpty(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function isEnvFileIgnored(): boolean {
+  if (!existsSync(".gitignore")) return false;
+  const gitignore = readFileSync(".gitignore", "utf8");
+  return /^\.env(?:\.\*)?$/m.test(gitignore) || /^\.env\.local$/m.test(gitignore);
 }
 
 function elapsed(start: number): number {
