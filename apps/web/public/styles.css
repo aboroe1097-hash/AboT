@@ -324,6 +324,11 @@ label span {
   text-transform: uppercase;
 }
 
+.section-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .project-list,
 .tools-status,
 .routes-list,

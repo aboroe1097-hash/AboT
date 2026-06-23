@@ -55,6 +55,7 @@ const els = {
   saveFile: document.querySelector("#save-file"),
   commandInput: document.querySelector("#command-input"),
   runCommand: document.querySelector("#run-command"),
+  copyCommandOutput: document.querySelector("#copy-command-output"),
   commandOutput: document.querySelector("#command-output")
 };
 
@@ -74,6 +75,7 @@ els.refreshTree.addEventListener("click", () => loadTree(els.treePath.value || "
 els.openTreePath.addEventListener("click", () => loadTree(els.treePath.value || "."));
 els.saveFile.addEventListener("click", saveFile);
 els.runCommand.addEventListener("click", runCommand);
+els.copyCommandOutput.addEventListener("click", copyCommandOutput);
 els.addContext.addEventListener("click", addCurrentFileToContext);
 els.routeButton.addEventListener("click", routeTask);
 els.chatForm.addEventListener("submit", sendChat);
@@ -250,6 +252,7 @@ async function saveFile() {
 async function runCommand() {
   if (!state.activeProjectId || !els.commandInput.value.trim()) return;
   els.commandOutput.textContent = "Running...";
+  els.copyCommandOutput.textContent = "Copy";
   const result = await api("/api/workspace/command", {
     method: "POST",
     body: {
@@ -266,6 +269,14 @@ async function runCommand() {
     result.stdout,
     result.stderr ? `\n[stderr]\n${result.stderr}` : ""
   ].join("\n");
+}
+
+async function copyCommandOutput() {
+  const text = els.commandOutput.textContent.trim();
+  if (!text) return;
+
+  await copyText(text);
+  flashButtonLabel(els.copyCommandOutput, "Copied");
 }
 
 function addCurrentFileToContext() {
@@ -442,6 +453,31 @@ async function api(path, options = {}) {
   const json = await response.json();
   if (!response.ok) throw new Error(json.error || "Request failed");
   return json;
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.append(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
+function flashButtonLabel(button, label) {
+  const original = button.textContent;
+  button.textContent = label;
+  window.setTimeout(() => {
+    button.textContent = original;
+  }, 1200);
 }
 
 function formatDate(value) {
