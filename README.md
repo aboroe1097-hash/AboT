@@ -79,6 +79,16 @@ http://127.0.0.1:3217
 npm run qa
 ```
 
+## Testing
+
+```txt
+npm test
+npm run test:watch
+npm run test:coverage
+```
+
+Tests are colocated as `*.test.ts` and run with Vitest. See [TESTING.md](docs/TESTING.md).
+
 ## Logging and Exports
 
 AboT logs orchestrated and fixed-agent runs in the same shape so you can compare routing overhead, cost units, token estimates, and timing.

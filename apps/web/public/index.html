@@ -17,7 +17,10 @@
               <div id="health-line" class="health-line">Starting</div>
             </div>
           </div>
-          <button id="refresh-projects" class="ghost-button" type="button">Refresh</button>
+          <div class="topbar-actions">
+            <button id="theme-toggle" class="ghost-button" type="button">Theme</button>
+            <button id="refresh-projects" class="ghost-button" type="button">Refresh</button>
+          </div>
         </header>
 
         <section id="chat-feed" class="thread-feed" aria-live="polite"></section>
@@ -63,13 +66,13 @@
             </div>
           </div>
 
-          <nav class="rail-tabs" aria-label="Inspector">
-            <button class="rail-tab active" data-panel="settings" type="button">Settings</button>
-            <button class="rail-tab" data-panel="workspace" type="button">Workspace</button>
-            <button class="rail-tab" data-panel="tools" type="button">Tools</button>
+          <nav class="rail-tabs" aria-label="Inspector" role="tablist">
+            <button id="tab-settings" class="rail-tab active" data-panel="settings" type="button" role="tab" aria-selected="true" aria-controls="panel-settings">Settings</button>
+            <button id="tab-workspace" class="rail-tab" data-panel="workspace" type="button" role="tab" aria-selected="false" aria-controls="panel-workspace">Workspace</button>
+            <button id="tab-tools" class="rail-tab" data-panel="tools" type="button" role="tab" aria-selected="false" aria-controls="panel-tools">Tools</button>
           </nav>
 
-          <div id="panel-settings" class="rail-panel active-panel">
+          <div id="panel-settings" class="rail-panel active-panel" role="tabpanel" aria-labelledby="tab-settings" tabindex="0">
             <section class="rail-section">
               <div class="section-head">
                 <span>Projects</span>
@@ -103,7 +106,7 @@
             </section>
           </div>
 
-          <div id="panel-workspace" class="rail-panel">
+          <div id="panel-workspace" class="rail-panel" role="tabpanel" aria-labelledby="tab-workspace" tabindex="0" hidden>
             <section class="rail-section">
               <div class="section-head">
                 <span>Files</span>
@@ -144,7 +147,7 @@
             </section>
           </div>
 
-          <div id="panel-tools" class="rail-panel">
+          <div id="panel-tools" class="rail-panel" role="tabpanel" aria-labelledby="tab-tools" tabindex="0" hidden>
             <section class="rail-section">
               <div class="section-head">
                 <span>API Tools</span>
@@ -163,6 +166,7 @@
               <div class="rail-sub">Routing, timing, tokens</div>
             </div>
             <div class="logs-actions">
+              <input id="route-filter" class="route-filter" placeholder="Filter logs" />
               <button id="export-json" type="button">JSON</button>
               <button id="export-csv" type="button">CSV</button>
               <button id="refresh-routes" type="button">Refresh</button>
@@ -173,6 +177,7 @@
       </aside>
     </div>
 
+    <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
     <script src="/app.js" type="module"></script>
   </body>
 </html>

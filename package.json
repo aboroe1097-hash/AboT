@@ -14,14 +14,19 @@
     "server": "tsx apps/server/src/index.ts",
     "workspace:init": "tsx apps/cli/src/workspace-init.ts",
     "opencode:hook": "tsx apps/cli/src/opencode-hook.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:api": "tsx apps/cli/src/check-api.ts",
     "test:router": "tsx apps/cli/src/check-router-examples.ts",
-    "qa": "npm run typecheck && npm run test:router && npm run test:api",
+    "qa": "npm run typecheck && npm test && npm run test:router && npm run test:api",
     "typecheck": "tsc -p tsconfig.base.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "^4.1.9",
     "tsx": "^4.20.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.9"
   }
 }

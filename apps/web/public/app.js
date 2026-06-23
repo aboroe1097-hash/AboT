@@ -1,7 +1,8 @@
 const state = {
   projects: [],
   activeProjectId: undefined,
-  toolsConfig: undefined
+  toolsConfig: undefined,
+  routes: []
 };
 
 const AGENTS = [
@@ -33,8 +34,10 @@ const els = {
   projectForm: document.querySelector("#project-form"),
   projectName: document.querySelector("#project-name"),
   projectRoot: document.querySelector("#project-root"),
+  themeToggle: document.querySelector("#theme-toggle"),
   addContext: document.querySelector(".plus-button"),
   chatForm: document.querySelector("#chat-form"),
+  chatButton: document.querySelector("#chat-button"),
   task: document.querySelector("#task"),
   openFiles: document.querySelector("#open-files"),
   changedFiles: document.querySelector("#changed-files"),
@@ -45,8 +48,10 @@ const els = {
   routeButton: document.querySelector("#route-button"),
   chatFeed: document.querySelector("#chat-feed"),
   routesList: document.querySelector("#routes-list"),
+  routeFilter: document.querySelector("#route-filter"),
   toolsStatus: document.querySelector("#tools-status"),
   toolsEditor: document.querySelector("#tools-editor"),
+  saveToolsButton: document.querySelector("#save-tools"),
   refreshTree: document.querySelector("#refresh-tree"),
   treePath: document.querySelector("#tree-path"),
   openTreePath: document.querySelector("#open-tree-path"),
@@ -57,8 +62,12 @@ const els = {
   commandInput: document.querySelector("#command-input"),
   runCommand: document.querySelector("#run-command"),
   copyCommandOutput: document.querySelector("#copy-command-output"),
-  commandOutput: document.querySelector("#command-output")
+  commandOutput: document.querySelector("#command-output"),
+  toastRegion: document.querySelector("#toast-region")
 };
+
+const initialTheme = localStorage.getItem("abot-theme") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+setTheme(initialTheme);
 
 document.querySelectorAll(".tab").forEach((button) => {
   button.addEventListener("click", () => setView(button.dataset.view));
@@ -67,24 +76,37 @@ document.querySelectorAll(".rail-tab").forEach((button) => {
   button.addEventListener("click", () => setPanel(button.dataset.panel));
 });
 
-document.querySelector("#refresh-projects").addEventListener("click", loadProjects);
-document.querySelector("#refresh-routes").addEventListener("click", loadRoutes);
+els.themeToggle.addEventListener("click", toggleTheme);
+bindAsync(document.querySelector("#refresh-projects"), "click", loadProjects);
+bindAsync(document.querySelector("#refresh-routes"), "click", loadRoutes);
 document.querySelector("#export-json").addEventListener("click", () => exportRoutes("json"));
 document.querySelector("#export-csv").addEventListener("click", () => exportRoutes("csv"));
-document.querySelector("#save-tools").addEventListener("click", saveTools);
-els.refreshTree.addEventListener("click", () => loadTree(els.treePath.value || "."));
-els.openTreePath.addEventListener("click", () => loadTree(els.treePath.value || "."));
-els.saveFile.addEventListener("click", saveFile);
-els.runCommand.addEventListener("click", runCommand);
-els.copyCommandOutput.addEventListener("click", copyCommandOutput);
+els.routeFilter.addEventListener("input", () => renderRoutes(state.routes));
+bindAsync(els.saveToolsButton, "click", saveTools);
+bindAsync(els.refreshTree, "click", () => loadTree(els.treePath.value || "."));
+bindAsync(els.openTreePath, "click", () => loadTree(els.treePath.value || "."));
+bindAsync(els.saveFile, "click", saveFile);
+bindAsync(els.runCommand, "click", runCommand);
+bindAsync(els.copyCommandOutput, "click", copyCommandOutput);
 els.addContext.addEventListener("click", addCurrentFileToContext);
-els.routeButton.addEventListener("click", routeTask);
-els.chatForm.addEventListener("submit", sendChat);
-els.projectForm.addEventListener("submit", addProject);
+bindAsync(els.routeButton, "click", routeTask);
+bindAsync(els.chatForm, "submit", sendChat);
+bindAsync(els.projectForm, "submit", addProject);
 
-await init();
+window.addEventListener("unhandledrejection", (event) => {
+  showToast(getErrorMessage(event.reason), "error");
+});
+window.addEventListener("error", (event) => {
+  showToast(event.message, "error");
+});
+
+await init().catch((error) => {
+  renderEmptyChat();
+  showToast(getErrorMessage(error), "error");
+});
 
 async function init() {
+  renderEmptyChat();
   renderAgentOptions();
   await loadHealth();
   await loadProjects();
@@ -110,46 +132,55 @@ async function loadProjects() {
 
 async function addProject(event) {
   event.preventDefault();
-  const project = await api("/api/projects", {
-    method: "POST",
-    body: {
-      name: els.projectName.value.trim(),
-      rootPath: els.projectRoot.value.trim()
-    }
+  const button = els.projectForm.querySelector("button[type='submit']");
+  await withButtonBusy(button, "Adding", async () => {
+    const project = await api("/api/projects", {
+      method: "POST",
+      body: {
+        name: els.projectName.value.trim(),
+        rootPath: els.projectRoot.value.trim()
+      }
+    });
+    state.activeProjectId = project.project.id;
+    els.projectName.value = "";
+    els.projectRoot.value = "";
+    await loadProjects();
+    showToast("Project added", "success");
   });
-  state.activeProjectId = project.project.id;
-  els.projectName.value = "";
-  els.projectRoot.value = "";
-  await loadProjects();
 }
 
 async function routeTask() {
-  const result = await api("/api/route", {
-    method: "POST",
-    body: buildTaskPayload()
+  await withButtonBusy(els.routeButton, "Routing", async () => {
+    const result = await api("/api/route", {
+      method: "POST",
+      body: buildTaskPayload()
+    });
+    renderRoutePreview(result);
+    await loadRoutes();
   });
-  renderRoutePreview(result);
-  await loadRoutes();
 }
 
 async function sendChat(event) {
   event.preventDefault();
   if (!els.task.value.trim()) return;
 
-  const result = await api("/api/chat", {
-    method: "POST",
-    body: buildTaskPayload()
-  });
+  await withButtonBusy(els.chatButton, els.executeTask.checked ? "Executing" : "Sending", async () => {
+    const result = await api("/api/chat", {
+      method: "POST",
+      body: buildTaskPayload()
+    });
 
-  renderMessages(result.messages);
-  els.task.value = "";
-  await loadRoutes();
+    renderMessages(result.messages);
+    els.task.value = "";
+    await loadRoutes();
+  });
 }
 
 async function loadRoutes() {
   if (!state.activeProjectId) return;
   const result = await api(`/api/routes?projectId=${encodeURIComponent(state.activeProjectId)}&limit=50`);
-  renderRoutes(result.routes);
+  state.routes = result.routes;
+  renderRoutes(state.routes);
 }
 
 function exportRoutes(format) {
@@ -166,7 +197,7 @@ async function loadTools() {
 }
 
 async function saveTools() {
-  try {
+  await withButtonBusy(els.saveToolsButton, "Saving", async () => {
     const parsed = JSON.parse(els.toolsEditor.value);
     const result = await api("/api/tools", {
       method: "PUT",
@@ -175,9 +206,8 @@ async function saveTools() {
     state.toolsConfig = result.config;
     els.toolsEditor.value = JSON.stringify(result.config, null, 2);
     renderTools(result.tools);
-  } catch (error) {
-    els.toolsStatus.innerHTML = `<div class="route-row"><div class="badge danger">${escapeHtml(error.message)}</div></div>`;
-  }
+    showToast("Tools saved", "success");
+  });
 }
 
 function renderProjects() {
@@ -242,38 +272,43 @@ async function loadFile(path) {
 
 async function saveFile() {
   if (!state.activeProjectId || !els.filePath.value.trim()) return;
-  const result = await api("/api/workspace/file", {
-    method: "PUT",
-    body: {
-      projectId: state.activeProjectId,
-      path: els.filePath.value.trim(),
-      content: els.fileEditor.value
-    }
+  await withButtonBusy(els.saveFile, "Saving", async () => {
+    const result = await api("/api/workspace/file", {
+      method: "PUT",
+      body: {
+        projectId: state.activeProjectId,
+        path: els.filePath.value.trim(),
+        content: els.fileEditor.value
+      }
+    });
+    els.commandOutput.textContent = `Saved ${result.path} (${result.bytes} bytes)`;
+    await loadTree(els.treePath.value || ".");
+    showToast(`Saved ${result.path}`, "success");
   });
-  els.commandOutput.textContent = `Saved ${result.path} (${result.bytes} bytes)`;
-  await loadTree(els.treePath.value || ".");
 }
 
 async function runCommand() {
   if (!state.activeProjectId || !els.commandInput.value.trim()) return;
   els.commandOutput.textContent = "Running...";
   els.copyCommandOutput.textContent = "Copy";
-  const result = await api("/api/workspace/command", {
-    method: "POST",
-    body: {
-      projectId: state.activeProjectId,
-      command: els.commandInput.value.trim(),
-      cwd: ".",
-      timeoutMs: 60000
-    }
+  await withButtonBusy(els.runCommand, "Running", async () => {
+    const result = await api("/api/workspace/command", {
+      method: "POST",
+      body: {
+        projectId: state.activeProjectId,
+        command: els.commandInput.value.trim(),
+        cwd: ".",
+        timeoutMs: 60000
+      }
+    });
+    els.commandOutput.textContent = [
+      `cwd: ${result.cwd}`,
+      `exit: ${result.exitCode ?? "null"} duration: ${result.durationMs}ms timedOut: ${result.timedOut}`,
+      "",
+      result.stdout,
+      result.stderr ? `\n[stderr]\n${result.stderr}` : ""
+    ].join("\n");
   });
-  els.commandOutput.textContent = [
-    `cwd: ${result.cwd}`,
-    `exit: ${result.exitCode ?? "null"} duration: ${result.durationMs}ms timedOut: ${result.timedOut}`,
-    "",
-    result.stdout,
-    result.stderr ? `\n[stderr]\n${result.stderr}` : ""
-  ].join("\n");
 }
 
 async function copyCommandOutput() {
@@ -307,6 +342,7 @@ function renderRoutePreview(result) {
 }
 
 function renderMessages(messages) {
+  clearEmptyChat();
   for (const message of messages) {
     const item = document.createElement("article");
     item.className = `message ${message.role}`;
@@ -326,14 +362,51 @@ function renderMessages(messages) {
   }
 }
 
+function renderEmptyChat() {
+  if (els.chatFeed.children.length > 0) return;
+  const item = document.createElement("article");
+  item.className = "empty-state";
+  item.innerHTML = `
+    <div class="empty-title">Ready to route your next task.</div>
+    <div class="empty-copy">Try a focused request, compare orchestrated vs fixed-agent mode, or open the Workspace tab to inspect files and run commands.</div>
+    <div class="empty-actions">
+      <button type="button" data-prompt="fix the auth regression in the failing tests">Debug task</button>
+      <button type="button" data-prompt="polish the CSS for the dashboard mobile layout">CSS task</button>
+      <button type="button" data-prompt="do the thing we discussed">Ambiguous task</button>
+    </div>
+  `;
+  item.querySelectorAll("[data-prompt]").forEach((button) => {
+    button.addEventListener("click", () => {
+      els.task.value = button.dataset.prompt;
+      els.task.focus();
+    });
+  });
+  els.chatFeed.append(item);
+}
+
+function clearEmptyChat() {
+  els.chatFeed.querySelector(".empty-state")?.remove();
+}
+
 function renderRoutes(routes) {
   els.routesList.innerHTML = "";
-  if (routes.length === 0) {
-    els.routesList.innerHTML = `<div class="route-row"><div class="route-meta">No routes yet</div></div>`;
+  const query = els.routeFilter.value.trim().toLowerCase();
+  const filtered = query
+    ? routes.filter((route) => {
+        const decision = route.decision || {};
+        const verdict = route.verdict || {};
+        return [route.task, decision.agent, verdict.intent, verdict.complexity, route.mode]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(query));
+      })
+    : routes;
+
+  if (filtered.length === 0) {
+    els.routesList.innerHTML = `<div class="route-row"><div class="route-meta">${query ? "No matching routes" : "No routes yet"}</div></div>`;
     return;
   }
 
-  for (const route of routes) {
+  for (const route of filtered) {
     const decision = route.decision || {};
     const verdict = route.verdict || {};
     const metrics = route.metrics || {};
@@ -427,11 +500,17 @@ function setView(view) {
 
 function setPanel(panel) {
   document.querySelectorAll(".rail-tab").forEach((button) => {
-    button.classList.toggle("active", button.dataset.panel === panel);
+    const active = button.dataset.panel === panel;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
   });
   document.querySelectorAll(".rail-panel").forEach((section) => {
-    section.classList.toggle("active-panel", section.id === `panel-${panel}`);
+    const active = section.id === `panel-${panel}`;
+    section.classList.toggle("active-panel", active);
+    section.hidden = !active;
   });
+  document.querySelector(`#panel-${panel}`)?.focus({ preventScroll: true });
 }
 
 function buildTaskPayload() {
@@ -470,6 +549,58 @@ function lines(value) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function bindAsync(element, event, handler) {
+  element.addEventListener(event, (nativeEvent) => {
+    Promise.resolve(handler(nativeEvent)).catch((error) => {
+      showToast(getErrorMessage(error), "error");
+    });
+  });
+}
+
+async function withButtonBusy(button, label, callback) {
+  const original = button?.textContent;
+  if (button) {
+    button.disabled = true;
+    button.textContent = label;
+  }
+
+  try {
+    return await callback();
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  }
+}
+
+function toggleTheme() {
+  const next = document.body.dataset.theme === "light" ? "dark" : "light";
+  setTheme(next);
+}
+
+function setTheme(theme) {
+  const normalized = theme === "light" ? "light" : "dark";
+  document.body.dataset.theme = normalized;
+  localStorage.setItem("abot-theme", normalized);
+  if (els.themeToggle) {
+    els.themeToggle.textContent = normalized === "light" ? "Dark" : "Light";
+  }
+}
+
+function showToast(message, tone = "info") {
+  if (!message) return;
+  const toast = document.createElement("div");
+  toast.className = `toast ${tone}`;
+  toast.textContent = message;
+  els.toastRegion.append(toast);
+  window.setTimeout(() => toast.remove(), 3800);
+}
+
+function getErrorMessage(error) {
+  return error instanceof Error ? error.message : String(error || "Something went wrong");
 }
 
 async function api(path, options = {}) {
