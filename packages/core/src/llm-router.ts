@@ -6,6 +6,7 @@ export interface LlmRouterOptions {
   apiKey?: string;
   model?: string;
   timeoutMs?: number;
+  provider?: "openai-compatible" | "gemini";
 }
 
 export interface LlmRouterChoice {
@@ -14,14 +15,31 @@ export interface LlmRouterChoice {
   raw?: unknown;
 }
 
+export const GEMINI_OPENAI_COMPAT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
+export const GEMINI_DEFAULT_ROUTER_MODEL = "gemini-3.1-flash-lite";
+
 export function getEnvLlmRouterOptions(): LlmRouterOptions {
+  const provider = getRouterProvider();
+  const geminiMode = provider === "gemini";
+  const apiKey = process.env.ABOT_ROUTER_API_KEY ?? (geminiMode ? process.env.GEMINI_API_KEY : undefined);
+  const baseUrl = process.env.ABOT_ROUTER_BASE_URL ?? (geminiMode ? GEMINI_OPENAI_COMPAT_BASE_URL : undefined);
+  const model = process.env.ABOT_ROUTER_MODEL ?? (geminiMode ? GEMINI_DEFAULT_ROUTER_MODEL : undefined);
+
   return {
-    enabled: Boolean(process.env.ABOT_ROUTER_API_KEY && process.env.ABOT_ROUTER_BASE_URL && process.env.ABOT_ROUTER_MODEL),
-    baseUrl: process.env.ABOT_ROUTER_BASE_URL,
-    apiKey: process.env.ABOT_ROUTER_API_KEY,
-    model: process.env.ABOT_ROUTER_MODEL,
+    enabled: Boolean(apiKey && baseUrl && model),
+    provider,
+    baseUrl,
+    apiKey,
+    model,
     timeoutMs: Number(process.env.ABOT_ROUTER_TIMEOUT_MS ?? 6000)
   };
+}
+
+function getRouterProvider(): "openai-compatible" | "gemini" {
+  const requested = process.env.ABOT_ROUTER_PROVIDER?.toLowerCase();
+  if (requested === "gemini") return "gemini";
+  if (requested === "openai-compatible") return "openai-compatible";
+  return process.env.GEMINI_API_KEY && !process.env.ABOT_ROUTER_API_KEY ? "gemini" : "openai-compatible";
 }
 
 export async function classifyWithLlmFallback(

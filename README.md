@@ -97,6 +97,16 @@ npm run dev
 
 Do not paste actual API keys into `configs/*.json`, `README.md`, or any tracked file. The server auto-loads `.env.local` on startup, and the Tools panel marks a tool as configured when the required env vars exist.
 
+For Gemini as the router classifier:
+
+```powershell
+Copy-Item .env.gemini.example .env.local
+notepad .env.local
+npm run dev
+```
+
+This uses Gemini's OpenAI-compatible chat endpoint with `gemini-3.1-flash-lite` by default. You can also set `ABOT_ROUTER_MODEL=gemini-3.5-flash` if you want a stronger router classifier.
+
 ## OpenCode Hook
 
 ```txt

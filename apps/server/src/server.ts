@@ -4,7 +4,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { performance } from "node:perf_hooks";
 import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
-import { planFixedAgent, planTaskWithFallback, type PlannedTask } from "@abot/core";
+import { getEnvLlmRouterOptions, planFixedAgent, planTaskWithFallback, type PlannedTask } from "@abot/core";
 import { estimateTokenCount } from "@abot/context";
 import { SqliteAboTStore, type ProjectRecord, type RouteEventRecord } from "@abot/memory";
 import { AGENT_NAMES, getAgentCostUnits, type AgentName } from "@abot/router";
@@ -71,10 +71,13 @@ async function handleRequest(input: {
   const url = new URL(request.url ?? "/", "http://127.0.0.1");
 
   if (request.method === "GET" && url.pathname === "/api/health") {
+    const routerLlm = getEnvLlmRouterOptions();
     sendJson(response, 200, {
       ok: true,
       version: "0.0.1",
-      routerLlmConfigured: Boolean(process.env.ABOT_ROUTER_API_KEY && process.env.ABOT_ROUTER_BASE_URL && process.env.ABOT_ROUTER_MODEL)
+      routerLlmConfigured: Boolean(routerLlm.enabled),
+      routerProvider: routerLlm.provider,
+      routerModel: routerLlm.model
     });
     return;
   }

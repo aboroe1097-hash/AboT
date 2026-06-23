@@ -1,5 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { getEnvLlmRouterOptions } from "@abot/core";
 
 export interface ApiToolConfig {
   id: string;
@@ -38,6 +39,16 @@ export function writeApiTools(config: ApiToolsFile, filePath = getToolsPath()): 
 
 export function getApiToolStatuses(config = readApiTools()): ApiToolStatus[] {
   return config.tools.map((tool) => {
+    if (tool.id === "router-llm") {
+      const router = getEnvLlmRouterOptions();
+      return {
+        ...tool,
+        kind: router.provider === "gemini" ? "gemini-openai-compatible-chat" : tool.kind,
+        configured: Boolean(router.enabled),
+        missingEnv: getRouterMissingEnv()
+      };
+    }
+
     const envNames = [tool.baseUrlEnv, tool.apiKeyEnv, tool.modelEnv].filter(Boolean) as string[];
     const missingEnv = envNames.filter((name) => !process.env[name]);
     return {
@@ -46,6 +57,17 @@ export function getApiToolStatuses(config = readApiTools()): ApiToolStatus[] {
       missingEnv
     };
   });
+}
+
+function getRouterMissingEnv(): string[] {
+  const router = getEnvLlmRouterOptions();
+  if (router.enabled) return [];
+  if (router.provider === "gemini") {
+    return process.env.ABOT_ROUTER_API_KEY || process.env.GEMINI_API_KEY
+      ? []
+      : ["GEMINI_API_KEY or ABOT_ROUTER_API_KEY"];
+  }
+  return ["ABOT_ROUTER_BASE_URL", "ABOT_ROUTER_API_KEY", "ABOT_ROUTER_MODEL"].filter((name) => !process.env[name]);
 }
 
 function ensureToolsFile(filePath: string): void {

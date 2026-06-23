@@ -95,7 +95,7 @@ async function init() {
 async function loadHealth() {
   const health = await api("/api/health");
   els.healthLine.textContent = health.routerLlmConfigured
-    ? "Router LLM configured"
+    ? `Router LLM configured: ${health.routerProvider || "provider"} / ${health.routerModel || "model"}`
     : "Router LLM not configured";
 }
 
