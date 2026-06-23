@@ -340,7 +340,7 @@ function mapRouteEvent(row: RouteEventRow): RouteEventRecord {
     id: row.id,
     projectId: row.project_id,
     task: row.task,
-    mode: (row.mode === "fixed_agent" ? "fixed_agent" : "orchestrated") as RouteEventRecord["mode"],
+    mode: row.mode === "fixed_agent" || row.mode === "orchestrated" ? row.mode : "orchestrated",
     fixedAgent: row.fixed_agent ?? undefined,
     openFiles: parseJsonArray(row.open_files_json),
     changedFiles: parseJsonArray(row.changed_files_json),

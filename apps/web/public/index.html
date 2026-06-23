@@ -77,11 +77,14 @@
               <button id="refresh-projects" type="button">Refresh</button>
             </div>
             <div id="active-project" class="project-current">AboT</div>
-            <form id="project-form" class="stack-form">
-              <input id="project-name" name="name" autocomplete="off" placeholder="Name" />
-              <input id="project-root" name="rootPath" autocomplete="off" placeholder="Root path" />
-              <button type="submit">Use Folder</button>
-            </form>
+            <details class="panel-details">
+              <summary>Change Folder</summary>
+              <form id="project-form" class="stack-form">
+                <input id="project-name" name="name" autocomplete="off" placeholder="Name" />
+                <input id="project-root" name="rootPath" autocomplete="off" placeholder="Root path" />
+                <button type="submit">Use Folder</button>
+              </form>
+            </details>
             <div id="project-list" class="project-list"></div>
           </section>
 
@@ -91,55 +94,58 @@
               <button id="confirm-api" type="button">Confirm</button>
             </div>
             <div id="setup-status" class="setup-status"></div>
-            <form id="api-setup-form" class="stack-form">
-              <label>
-                <span>Router</span>
-                <select id="router-provider">
-                  <option value="gemini">Gemini</option>
-                  <option value="openai-compatible">OpenAI-compatible</option>
-                </select>
-              </label>
-              <label>
-                <span>Router Model</span>
-                <input id="router-model" autocomplete="off" placeholder="gemini-3.1-flash-lite" />
-              </label>
-              <label id="router-base-url-row">
-                <span>Router Base URL</span>
-                <input id="router-base-url" autocomplete="off" placeholder="https://api.openai.com/v1" />
-              </label>
-              <label>
-                <span>Router API Key</span>
-                <input id="router-api-key" type="password" autocomplete="off" placeholder="Leave blank to keep current" />
-              </label>
-              <label>
-                <span>Execution Provider</span>
-                <select id="execution-provider">
-                  <option value="auto">Auto: Codex + Gemini</option>
-                  <option value="codex-cli">Codex login</option>
-                  <option value="gemini">Gemini</option>
-                  <option value="openai">OpenAI</option>
-                  <option value="openrouter">OpenRouter</option>
-                  <option value="opencode-go">opencode-go</option>
-                </select>
-              </label>
-              <label>
-                <span>Execution Model</span>
-                <input id="execution-model" autocomplete="off" placeholder="gemini-3.1-flash-lite" />
-              </label>
-              <label id="execution-api-key-row">
-                <span>Execution API Key</span>
-                <input id="execution-api-key" type="password" autocomplete="off" placeholder="Leave blank to keep current" />
-              </label>
-              <label id="opencode-go-row">
-                <span>opencode-go Base URL</span>
-                <input id="opencode-go-base-url" autocomplete="off" placeholder="http://127.0.0.1:11434/v1" />
-              </label>
-              <label>
-                <span>OpenAgent Config</span>
-                <input id="openagent-config" autocomplete="off" placeholder="C:\Users\you\.config\opencode\oh-my-openagent.json" />
-              </label>
-              <button id="save-api" class="primary-button" type="submit">Save Locally</button>
-            </form>
+            <details class="panel-details">
+              <summary>Edit API</summary>
+              <form id="api-setup-form" class="stack-form">
+                <label>
+                  <span>Router</span>
+                  <select id="router-provider">
+                    <option value="gemini">Gemini</option>
+                    <option value="openai-compatible">OpenAI-compatible</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Router Model</span>
+                  <input id="router-model" autocomplete="off" placeholder="gemini-3.1-flash-lite" />
+                </label>
+                <label id="router-base-url-row">
+                  <span>Router Base URL</span>
+                  <input id="router-base-url" autocomplete="off" placeholder="https://api.openai.com/v1" />
+                </label>
+                <label>
+                  <span>Router API Key</span>
+                  <input id="router-api-key" type="password" autocomplete="off" placeholder="Leave blank to keep current" />
+                </label>
+                <label>
+                  <span>Execution Provider</span>
+                  <select id="execution-provider">
+                    <option value="auto">Auto: Codex + Gemini</option>
+                    <option value="codex-cli">Codex login</option>
+                    <option value="gemini">Gemini</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="opencode-go">opencode-go</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Execution Model</span>
+                  <input id="execution-model" autocomplete="off" placeholder="gemini-3.1-flash-lite" />
+                </label>
+                <label id="execution-api-key-row">
+                  <span>Execution API Key</span>
+                  <input id="execution-api-key" type="password" autocomplete="off" placeholder="Leave blank to keep current" />
+                </label>
+                <label id="opencode-go-row">
+                  <span>opencode-go Base URL</span>
+                  <input id="opencode-go-base-url" autocomplete="off" placeholder="http://127.0.0.1:11434/v1" />
+                </label>
+                <label>
+                  <span>OpenAgent Config</span>
+                  <input id="openagent-config" autocomplete="off" placeholder="C:\Users\you\.config\opencode\oh-my-openagent.json" />
+                </label>
+                <button id="save-api" class="primary-button" type="submit">Save Locally</button>
+              </form>
+            </details>
           </section>
 
           <section class="panel terminal-panel">

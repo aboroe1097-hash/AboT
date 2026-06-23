@@ -343,13 +343,14 @@ body[data-theme="light"] .primary-button {
   overflow-x: hidden;
   overflow-y: auto;
   padding: 14px;
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   background: color-mix(in srgb, var(--bg) 88%, var(--surface));
 }
 
 .panel {
+  flex: 0 0 auto;
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
@@ -380,6 +381,23 @@ body[data-theme="light"] .primary-button {
   min-width: 0;
   display: grid;
   gap: 9px;
+}
+
+.panel-details {
+  min-width: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 9px;
+}
+
+.panel-details summary {
+  width: fit-content;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.panel-details .stack-form {
+  margin-top: 10px;
 }
 
 .project-current {
@@ -475,6 +493,10 @@ body[data-theme="light"] .primary-button {
   padding: 10px;
   white-space: pre-wrap;
   font: 12px/1.5 "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+}
+
+.command-output:empty {
+  display: none;
 }
 
 .route-filter {

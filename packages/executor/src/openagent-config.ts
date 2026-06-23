@@ -18,13 +18,38 @@ interface OpenAgentConfig {
   categories?: Record<string, OpenAgentModelEntry>;
 }
 
+const AGENT_TO_CONFIG_KEY: Record<AgentName, string> = {
+  "visual-engineering": "visual-engineering",
+  ultrabrain: "deep",
+  deep: "deep",
+  artistry: "artistry",
+  quick: "quick",
+  "unspecified-low": "quick",
+  "unspecified-high": "coding",
+  writing: "writing",
+  sisyphus: "coding",
+  hephaestus: "coding",
+  oracle: "planning",
+  librarian: "research",
+  explore: "research",
+  "multimodal-looker": "multimodal",
+  prometheus: "coding",
+  metis: "planning",
+  momus: "review",
+  atlas: "coding",
+  "sisyphus-junior": "coding"
+};
+
 export function getOpenAgentConfigPath(): string {
   return process.env.ABOT_OPENAGENT_CONFIG ?? join(homedir(), ".config", "opencode", "oh-my-openagent.json");
 }
 
 export function getAgentModelCandidates(agent: AgentName, configPath = getOpenAgentConfigPath()): AgentModelCandidate[] {
   const config = readOpenAgentConfig(configPath);
-  const entry = config.agents?.[agent] ?? config.categories?.[agent];
+  const entry =
+    config.agents?.[agent] ??
+    config.categories?.[agent] ??
+    config.categories?.[AGENT_TO_CONFIG_KEY[agent]];
   if (!entry?.model) return [];
 
   const candidates: AgentModelCandidate[] = [

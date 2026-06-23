@@ -6,37 +6,37 @@ AboT uses Vitest for unit and integration tests.
 
 Run the full test suite:
 
-```powershell
+```bash
 npm test
 ```
 
 Run tests in watch mode:
 
-```powershell
+```bash
 npm run test:watch
 ```
 
 Run coverage:
 
-```powershell
+```bash
 npm run test:coverage
 ```
 
 Run one test file:
 
-```powershell
+```bash
 npm test -- packages/router/src/router.test.ts
 ```
 
 Run tests by name:
 
-```powershell
+```bash
 npm test -- -t "router examples"
 ```
 
 Run full local QA:
 
-```powershell
+```bash
 npm run qa
 ```
 
@@ -76,7 +76,7 @@ The folder is ignored by Git. Use coverage to find untested code, not as a hard 
 
 These still exist for quick CLI checks:
 
-```powershell
+```bash
 npm run test:router
 npm run test:api
 ```

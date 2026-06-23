@@ -24,6 +24,16 @@ describe("classifySignals", () => {
     expect(verdict.suggestedAgent).toBe("prometheus");
   });
 
+  it("lifts confidence when several keywords point at the same intent", () => {
+    const verdict = classifySignals({
+      task: "fix the error, debug the crash, and repair the broken flow"
+    });
+
+    expect(verdict.phase).toBe("deterministic");
+    expect(verdict.intent).toBe("debugging");
+    expect(verdict.confidence).toBeGreaterThan(0.9);
+  });
+
   it("marks vague tasks for LLM fallback", () => {
     const verdict = classifySignals({ task: "do the thing we discussed" });
 

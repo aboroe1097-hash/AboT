@@ -228,7 +228,8 @@ function scoreKeywords(task: string, signals: string[]): Record<RouterIntent, nu
   for (const intent of INTENTS) {
     for (const [keyword, weight] of KEYWORD_MAP[intent]) {
       if (containsKeyword(task, keyword)) {
-        scores[intent] = Math.max(scores[intent], weight);
+        const previous = scores[intent];
+        scores[intent] = previous === 0 ? weight : Math.min(1, Math.max(previous, weight) + 0.05);
         signals.push(`keyword:${intent}:${keyword}`);
       }
     }

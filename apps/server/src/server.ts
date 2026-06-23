@@ -795,7 +795,9 @@ async function runWorkspaceCommand(command: string, cwd: string, timeoutMs: numb
 }
 
 function normalizeAgentName(value: unknown): AgentName | undefined {
-  return typeof value === "string" && (AGENT_NAMES as readonly string[]).includes(value) ? (value as AgentName) : undefined;
+  if (typeof value !== "string") return undefined;
+  const agentSet = new Set(AGENT_NAMES);
+  return agentSet.has(value) ? value : undefined;
 }
 
 function estimateOutputTokens(planned: PlannedTask): number {

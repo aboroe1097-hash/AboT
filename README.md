@@ -105,6 +105,14 @@ notepad .env.local
 npm run dev
 ```
 
+macOS/Linux:
+
+```bash
+cp .env.example .env.local
+${EDITOR:-nano} .env.local
+npm run dev
+```
+
 Do not paste actual API keys into `configs/*.json`, `README.md`, or any tracked file. The server auto-loads `.env.local` on startup, and the Tools panel marks a tool as configured when the required env vars exist.
 
 For Gemini as the router classifier:
@@ -112,6 +120,14 @@ For Gemini as the router classifier:
 ```powershell
 Copy-Item .env.gemini.example .env.local
 notepad .env.local
+npm run dev
+```
+
+macOS/Linux:
+
+```bash
+cp .env.gemini.example .env.local
+${EDITOR:-nano} .env.local
 npm run dev
 ```
 
@@ -133,6 +149,14 @@ If unset, AboT tries:
 %USERPROFILE%\.config\opencode\oh-my-openagent.json
 ```
 
+On macOS/Linux, the default is the same path under your home directory:
+
+```txt
+~/.config/opencode/oh-my-openagent.json
+```
+
+If the exact AboT agent name is not present in that file, AboT maps agents to common OpenAgent categories such as `coding`, `review`, `planning`, `research`, `quick`, `deep`, and `multimodal`.
+
 Model strings map to environment keys at runtime:
 
 ```txt
@@ -141,6 +165,8 @@ google/gemini-3.1-pro-preview   -> GEMINI_API_KEY
 openrouter/...                  -> OPENROUTER_API_KEY
 opencode-go/...                 -> OPENCODE_GO_BASE_URL and optional OPENCODE_GO_API_KEY
 ```
+
+`OPENCODE_GO_BASE_URL` is only needed when you select `opencode-go/...` models. Set it to the OpenAI-compatible `/v1` URL exposed by your local gateway.
 
 Execution metrics are appended to route logs as `executionStatus`, `executionProvider`, `executionModel`, `actualInputTokens`, `actualOutputTokens`, and `executionLatencyMs`.
 

@@ -404,7 +404,7 @@ async function readJson(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) return {};
   try {
-    return JSON.parse(text) as unknown;
+    return JSON.parse(text);
   } catch {
     return { error: { message: text.slice(0, 500) } };
   }

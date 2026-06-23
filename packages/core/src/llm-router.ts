@@ -128,10 +128,20 @@ export async function classifyWithLlmFallback(
       raw: json
     };
   } catch (error) {
+    let errorMessage = "Router LLM request failed.";
+    if (error instanceof Error) {
+      if (error.name === "AbortError") {
+        errorMessage = "Router LLM request timed out.";
+      } else if (error.name === "TypeError" && error.message.includes("fetch")) {
+        errorMessage = "Router LLM network error.";
+      } else {
+        errorMessage = error.message;
+      }
+    }
     recordLlmFailure(diagnostics, {
       provider: options.provider,
       model: options.model,
-      message: error instanceof Error ? error.message : "Router LLM request failed."
+      message: errorMessage
     });
     return undefined;
   } finally {

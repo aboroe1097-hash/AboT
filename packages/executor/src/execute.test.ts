@@ -88,6 +88,48 @@ describe("executeAgentTask", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  it("maps AboT agents to OpenAgent category keys", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "abot-executor-"));
+    const configPath = join(dir, "oh-my-openagent.json");
+
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        categories: {
+          coding: {
+            model: "google/gemini-coding"
+          }
+        }
+      }),
+      "utf8"
+    );
+
+    process.env.GEMINI_API_KEY = "valid";
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonResponse(200, {
+        choices: [{ message: { content: "category worked" }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 7, completion_tokens: 3 }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const result = await executeAgentTask({
+        agent: "atlas",
+        configPath,
+        contextBudgetTokens: 16000,
+        contextFiles: [],
+        messages: [{ role: "user", content: "hello" }]
+      });
+
+      expect(result.content).toBe("category worked");
+      expect(result.model).toBe("google/gemini-coding");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("uses the auto Gemini lane for lightweight agents", async () => {
     process.env.ABOT_EXECUTION_ADAPTER = "auto";
     process.env.ABOT_EXECUTION_FALLBACK_MODEL = "google/gemini-lite";
