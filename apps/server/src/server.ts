@@ -566,6 +566,7 @@ async function runWorkspaceCommand(command: string, cwd: string, timeoutMs: numb
   stderr: string;
   timedOut: boolean;
 }> {
+  // Local-first full-access workspace command execution. Do not expose this API over a network.
   try {
     const { stdout, stderr } = await execAsync(command, {
       cwd,

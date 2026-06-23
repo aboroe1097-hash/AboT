@@ -33,6 +33,7 @@ const els = {
   projectForm: document.querySelector("#project-form"),
   projectName: document.querySelector("#project-name"),
   projectRoot: document.querySelector("#project-root"),
+  addContext: document.querySelector(".plus-button"),
   chatForm: document.querySelector("#chat-form"),
   task: document.querySelector("#task"),
   openFiles: document.querySelector("#open-files"),
@@ -73,6 +74,7 @@ els.refreshTree.addEventListener("click", () => loadTree(els.treePath.value || "
 els.openTreePath.addEventListener("click", () => loadTree(els.treePath.value || "."));
 els.saveFile.addEventListener("click", saveFile);
 els.runCommand.addEventListener("click", runCommand);
+els.addContext.addEventListener("click", addCurrentFileToContext);
 els.routeButton.addEventListener("click", routeTask);
 els.chatForm.addEventListener("submit", sendChat);
 els.projectForm.addEventListener("submit", addProject);
@@ -264,6 +266,18 @@ async function runCommand() {
     result.stdout,
     result.stderr ? `\n[stderr]\n${result.stderr}` : ""
   ].join("\n");
+}
+
+function addCurrentFileToContext() {
+  setPanel("settings");
+  const currentFile = els.filePath.value.trim();
+  if (currentFile) {
+    const existing = new Set(lines(els.openFiles.value));
+    if (!existing.has(currentFile)) {
+      els.openFiles.value = [...existing, currentFile].join("\n");
+    }
+  }
+  els.openFiles.focus();
 }
 
 function renderRoutePreview(result) {

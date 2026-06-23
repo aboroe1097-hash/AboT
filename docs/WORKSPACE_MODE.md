@@ -45,6 +45,8 @@ The file APIs prevent relative paths from escaping the selected project root.
 
 Commands run with the project root as the working directory.
 
+This is intentionally a local full-access feature for your own machine. Do not expose the AboT server or `/api/workspace/command` to a network without adding authentication and command sandboxing.
+
 Examples:
 
 ```txt
@@ -107,4 +109,3 @@ POST /api/workspace/command
 ## Current Limit
 
 v0.01 gives AboT the workspace mechanics. It can browse, edit, save, and run commands. Full autonomous code editing through model execution is the next layer: the model/tool executor should call these workspace APIs and log every file operation.
-

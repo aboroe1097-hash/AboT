@@ -87,7 +87,9 @@ estimatedInputTokens    task + context estimate
 estimatedOutputTokens   rough expected output by complexity
 ```
 
-These are estimates, not provider-reported usage. When real model execution is added, actual provider token usage should be appended as:
+These are estimates, not provider-reported usage. The v0.01 estimator uses `Math.ceil(text.length / 3.5)`, which is a rough English/code heuristic. It is good enough for warnings and comparisons, but it will not match every language or provider tokenizer.
+
+When real model execution is added, actual provider token usage should be appended as:
 
 ```txt
 actualInputTokens
@@ -156,4 +158,3 @@ curl -X POST http://127.0.0.1:3217/api/route \
    - route warnings
 
 For real execution later, add provider-reported latency and actual token usage to the same row.
-

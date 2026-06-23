@@ -83,7 +83,7 @@ npm run qa
 
 AboT logs orchestrated and fixed-agent runs in the same shape so you can compare routing overhead, cost units, token estimates, and timing.
 
-See [LOGGING_AND_EXPORTS.md](D:/Project/AboT/docs/LOGGING_AND_EXPORTS.md).
+See [LOGGING_AND_EXPORTS.md](docs/LOGGING_AND_EXPORTS.md).
 
 ## OpenCode Hook
 
@@ -91,7 +91,7 @@ See [LOGGING_AND_EXPORTS.md](D:/Project/AboT/docs/LOGGING_AND_EXPORTS.md).
 npm run opencode:hook
 ```
 
-See [OPENCODE_HOOK.md](D:/Project/AboT/docs/OPENCODE_HOOK.md).
+See [OPENCODE_HOOK.md](docs/OPENCODE_HOOK.md).
 
 ## Workspace Mode
 
@@ -103,4 +103,4 @@ npm run workspace:init -- D:\Project\your-project
 
 Then use the Workspace tab to browse files, edit files, and run terminal commands from that project root.
 
-See [WORKSPACE_MODE.md](D:/Project/AboT/docs/WORKSPACE_MODE.md).
+See [WORKSPACE_MODE.md](docs/WORKSPACE_MODE.md).

@@ -39,6 +39,7 @@ export function scoreContextCandidates(task: string, candidates: ContextCandidat
 }
 
 export function estimateTokenCount(text: string): number {
+  // v0.01 budget warnings use a rough English/code heuristic until providers return actual usage.
   return Math.ceil(text.length / 3.5);
 }
 
