@@ -165,14 +165,18 @@ async function loadTools() {
 }
 
 async function saveTools() {
-  const parsed = JSON.parse(els.toolsEditor.value);
-  const result = await api("/api/tools", {
-    method: "PUT",
-    body: parsed
-  });
-  state.toolsConfig = result.config;
-  els.toolsEditor.value = JSON.stringify(result.config, null, 2);
-  renderTools(result.tools);
+  try {
+    const parsed = JSON.parse(els.toolsEditor.value);
+    const result = await api("/api/tools", {
+      method: "PUT",
+      body: parsed
+    });
+    state.toolsConfig = result.config;
+    els.toolsEditor.value = JSON.stringify(result.config, null, 2);
+    renderTools(result.tools);
+  } catch (error) {
+    els.toolsStatus.innerHTML = `<div class="route-row"><div class="badge danger">${escapeHtml(error.message)}</div></div>`;
+  }
 }
 
 function renderProjects() {

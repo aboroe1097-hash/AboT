@@ -95,6 +95,24 @@ try {
   const tools = await expectOk("tools", fetchJson(`${baseUrl}/api/tools`));
   if (!Array.isArray(tools.tools)) throw new Error("Expected tools array");
 
+  const rejectedTools = await fetch(`${baseUrl}/api/tools`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      tools: [
+        {
+          id: "bad-secret",
+          label: "Bad Secret",
+          kind: "openai-compatible-chat",
+          enabled: true,
+          apiKeyEnv: "sk-this-should-not-be-saved"
+        }
+      ]
+    })
+  });
+  if (rejectedTools.status !== 400) throw new Error("Expected actual API key values to be rejected");
+  console.log("PASS tools reject secret values");
+
   await expectOk(
     "workspace write",
     fetchJson(`${baseUrl}/api/workspace/file`, {

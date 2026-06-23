@@ -62,11 +62,19 @@ function normalize(config: ApiToolsFile): ApiToolsFile {
           label: String(tool.label),
           kind: String(tool.kind),
           enabled: Boolean(tool.enabled),
-          baseUrlEnv: tool.baseUrlEnv ? String(tool.baseUrlEnv) : undefined,
-          apiKeyEnv: tool.apiKeyEnv ? String(tool.apiKeyEnv) : undefined,
-          modelEnv: tool.modelEnv ? String(tool.modelEnv) : undefined
+          baseUrlEnv: normalizeEnvName(tool.baseUrlEnv, "baseUrlEnv"),
+          apiKeyEnv: normalizeEnvName(tool.apiKeyEnv, "apiKeyEnv"),
+          modelEnv: normalizeEnvName(tool.modelEnv, "modelEnv")
         }))
       : []
   };
 }
 
+function normalizeEnvName(value: unknown, fieldName: string): string | undefined {
+  if (!value) return undefined;
+  const envName = String(value).trim();
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(envName)) {
+    throw new Error(`${fieldName} must be an environment variable name, not a secret value`);
+  }
+  return envName;
+}

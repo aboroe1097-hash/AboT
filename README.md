@@ -85,6 +85,18 @@ AboT logs orchestrated and fixed-agent runs in the same shape so you can compare
 
 See [LOGGING_AND_EXPORTS.md](docs/LOGGING_AND_EXPORTS.md).
 
+## Local API Keys
+
+The web Tools panel stores environment variable names only. Put real keys in `.env.local`, which is ignored by Git:
+
+```powershell
+Copy-Item .env.example .env.local
+notepad .env.local
+npm run dev
+```
+
+Do not paste actual API keys into `configs/*.json`, `README.md`, or any tracked file. The server auto-loads `.env.local` on startup, and the Tools panel marks a tool as configured when the required env vars exist.
+
 ## OpenCode Hook
 
 ```txt

@@ -253,7 +253,15 @@ async function handleRequest(input: {
 
   if (request.method === "PUT" && url.pathname === "/api/tools") {
     const body = await readJson<ApiToolsFile>(request);
-    const config = writeApiTools(body);
+    let config: ApiToolsFile;
+    try {
+      config = writeApiTools(body);
+    } catch (error) {
+      sendJson(response, 400, {
+        error: error instanceof Error ? error.message : "Invalid tool configuration"
+      });
+      return;
+    }
     sendJson(response, 200, {
       config,
       tools: getApiToolStatuses(config)
