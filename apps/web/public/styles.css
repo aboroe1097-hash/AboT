@@ -115,9 +115,10 @@ summary:focus-visible {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: grid;
   grid-template-rows: 58px minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .topbar {
@@ -179,7 +180,8 @@ summary:focus-visible {
 .workspace {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  overflow: hidden;
 }
 
 .task-pane {
@@ -513,13 +515,16 @@ body[data-theme="light"] .primary-button {
   color: var(--green);
 }
 
-@media (max-width: 1080px) {
+@media (max-width: 680px) {
   .app-shell {
+    height: auto;
     min-height: 100vh;
+    overflow: visible;
   }
 
   .workspace {
     grid-template-columns: 1fr;
+    overflow: visible;
   }
 
   .task-pane {
