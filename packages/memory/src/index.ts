@@ -42,6 +42,8 @@ export interface RouteEventInput {
     phase: string;
     costUnits: number;
     contextBudgetTokens: number;
+    confidence?: number;
+    reason?: string;
     warnings: string[];
   };
   context: unknown;

@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { planFixedAgent, planTask } from "./index.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { planFixedAgent, planTask, planTaskWithFallback } from "./index.js";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("planTask", () => {
   it("returns route, context, and timing details for deterministic tasks", () => {
@@ -52,5 +56,50 @@ describe("planFixedAgent", () => {
     expect(planned.decision.agent).toBe("atlas");
     expect(planned.decision.warnings).toContain("fixed-agent-baseline");
     expect(planned.contextEstimateTokens).toBeGreaterThan(0);
+  });
+});
+
+describe("planTaskWithFallback", () => {
+  it("keeps router auth failures concise when providers wrap errors in arrays", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            {
+              error: {
+                code: 401,
+                message:
+                  "Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project."
+              }
+            }
+          ]),
+          {
+            status: 401,
+            headers: { "content-type": "application/json" }
+          }
+        )
+      )
+    );
+
+    const planned = await planTaskWithFallback(
+      {
+        task: "everything ready?"
+      },
+      {
+        llmRouter: {
+          enabled: true,
+          provider: "gemini",
+          baseUrl: "https://example.test/v1",
+          apiKey: "invalid",
+          model: "gemini-test"
+        }
+      }
+    );
+
+    expect(planned.decision.warnings).toContain("llm-fallback-failed:401");
+    expect(planned.decision.reason).toContain("status 401: invalid authentication credentials");
+    expect(planned.decision.reason).not.toContain('"error"');
+    expect(planned.decision.reason).not.toContain("developers.google.com");
   });
 });

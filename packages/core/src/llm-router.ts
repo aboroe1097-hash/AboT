@@ -186,8 +186,8 @@ async function readRouterErrorMessage(response: Response): Promise<string> {
     const text = await response.text();
     if (!text.trim()) return response.statusText || `HTTP ${response.status}`;
     try {
-      const json = JSON.parse(text) as { error?: { message?: string }; message?: string };
-      return sanitizeRouterMessage(json.error?.message ?? json.message ?? text);
+      const json = JSON.parse(text) as unknown;
+      return sanitizeRouterMessage(extractErrorMessage(json) ?? "Provider returned an error response.");
     } catch {
       return sanitizeRouterMessage(text);
     }
@@ -205,6 +205,27 @@ function recordLlmFailure(diagnostics: LlmRouterDiagnostics | undefined, failure
 }
 
 function sanitizeRouterMessage(message: string): string {
-  const compact = message.replace(/\s+/g, " ").trim();
-  return compact.length > 240 ? `${compact.slice(0, 237)}...` : compact;
+  let compact = message.replace(/\s+/g, " ").trim();
+  compact = compact.replace(/\s*See https?:\/\/\S+.*/i, "");
+
+  if (/invalid authentication credentials/i.test(compact)) {
+    return "invalid authentication credentials";
+  }
+
+  return compact.length > 160 ? `${compact.slice(0, 157)}...` : compact;
+}
+
+function extractErrorMessage(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const message = extractErrorMessage(item);
+      if (message) return message;
+    }
+    return undefined;
+  }
+
+  if (!value || typeof value !== "object") return typeof value === "string" ? value : undefined;
+  const record = value as Record<string, unknown>;
+  if (typeof record.message === "string") return record.message;
+  return extractErrorMessage(record.error);
 }
